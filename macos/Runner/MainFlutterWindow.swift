@@ -7,6 +7,8 @@ class MainFlutterWindow: NSWindow {
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    self.title = "Tone Desk"
+    self.minSize = NSSize(width: 800, height: 480)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
