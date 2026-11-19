@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
@@ -247,23 +249,57 @@ class const _Ring({
 }
 
 /// One question instead of nine names: how colorful should it be?
-class const _StylePills() extends StatelessWidget {
+/// The styles as one connected strip. A single spring hands width from the
+/// old pick to the new one, so every other band holds still.
+class const _StylePills() extends StatefulWidget {
+  @override
+  State<_StylePills> createState() => _StylePillsState();
+}
+
+class _StylePillsState() extends State<_StylePills> with SingleTickerProviderStateMixin {
+  /// Material's expressive fast spatial spring, for taps.
+  static final _bouncy = SpringDescription.withDampingRatio(mass: 1, stiffness: 800, ratio: 0.6);
+
+  /// Material's standard fast spatial spring: no wobble under a finger.
+  static final _steady = SpringDescription.withDampingRatio(mass: 1, stiffness: 1400, ratio: 0.9);
+
+  late final _progress = AnimationController.unbounded(vsync: this, value: 1);
+  var _from = <double>[];
+  int? _target;
+  bool _dragging = false;
+
+  /// Counts picks, so a style revisited mid-fade gets a fresh blurb.
+  int _picks = 0;
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    super.dispose();
+  }
+
+  /// How far each band has grown, summing to one at every frame.
+  List<double> get _weights {
+    final t = _progress.value;
+    return [for (var i = 0; i < styles.length; i++) lerpDouble(_from[i], i == _target ? 1 : 0, t)!];
+  }
+
+  void _retarget(int to) {
+    if (to == _target) return;
+    _from = _target == null ? [for (var i = 0; i < styles.length; i++) i == to ? 1.0 : 0.0] : _weights;
+    _target = to;
+    _picks++;
+    if (_from[to] == 1) return;
+    _progress
+      ..value = 0
+      ..animateWith(SpringSimulation(_dragging ? _steady : _bouncy, 0, 1, 0));
+  }
+
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
     final (recipe, brightness) = context.select((StudioCubit c) => (c.state.recipe, c.state.brightness));
     final colors = Theme.of(context).colorScheme;
-    final selected = styles.indexOf(recipe.variant);
-
-    void pick(double dx, List<double> widths, double gap) {
-      var i = 0;
-      for (var x = 0.0; i < widths.length - 1 && dx > x + widths[i] + gap / 2; i++) {
-        x += widths[i] + gap;
-      }
-      if (styles[i] == recipe.variant) return;
-      HapticFeedback.selectionClick();
-      cubit.setVariant(styles[i]);
-    }
+    _retarget(styles.indexOf(recipe.variant));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,32 +309,53 @@ class const _StylePills() extends StatelessWidget {
             const gap = 3.0;
             const grow = 1.8;
             final unit = (constraints.maxWidth - gap * (styles.length - 1)) / (styles.length - 1 + grow);
-            final widths = [for (var i = 0; i < styles.length; i++) i == selected ? unit * grow : unit];
-            return MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (d) => pick(d.localPosition.dx, widths, gap),
-                onHorizontalDragUpdate: (d) => pick(d.localPosition.dx, widths, gap),
-                child: SizedBox(
-                  height: 60,
-                  child: Row(
-                    spacing: gap,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final (i, v) in styles.indexed)
-                        _StyleBand(
-                          palettes: resolveScheme(recipe.copyWith(variant: v), brightness).palettes,
-                          selected: i == selected,
-                          width: widths[i],
-                          first: i == 0,
-                          last: i == styles.length - 1,
-                          tooltip: '${v.mood} · ${v.title}',
-                        ),
-                    ],
+            final palettes = [for (final v in styles) resolveScheme(recipe.copyWith(variant: v), brightness).palettes];
+            return AnimatedBuilder(
+              animation: _progress,
+              builder: (context, _) {
+                final weights = _weights;
+                final widths = [for (final w in weights) unit * (1 + (grow - 1) * w)];
+
+                void pick(double dx) {
+                  var i = 0;
+                  for (var x = 0.0; i < widths.length - 1 && dx > x + widths[i] + gap / 2; i++) {
+                    x += widths[i] + gap;
+                  }
+                  if (styles[i] == recipe.variant) return;
+                  HapticFeedback.selectionClick();
+                  cubit.setVariant(styles[i]);
+                }
+
+                return MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (d) => pick(d.localPosition.dx),
+                    onHorizontalDragStart: (_) => _dragging = true,
+                    onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+                    onHorizontalDragEnd: (_) => _dragging = false,
+                    onHorizontalDragCancel: () => _dragging = false,
+                    child: SizedBox(
+                      height: 60,
+                      child: Row(
+                        spacing: gap,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final (i, v) in styles.indexed)
+                            _StyleBand(
+                              palettes: palettes[i],
+                              grown: weights[i],
+                              width: widths[i],
+                              first: i == 0,
+                              last: i == styles.length - 1,
+                              tooltip: '${v.mood} · ${v.title}',
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         ),
@@ -319,7 +376,7 @@ class const _StylePills() extends StatelessWidget {
                 TextSpan(text: recipe.variant.blurb),
               ],
             ),
-            key: ValueKey(recipe.variant),
+            key: ValueKey(_picks),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 13, height: 1.35, color: colors.onSurfaceVariant),
@@ -341,10 +398,10 @@ class const _StyleName() extends StatelessWidget {
 
 /// One style in the strip: its primary on top, secondary and tertiary below.
 /// Shaped like an M3 Expressive connected button group: tight inner corners,
-/// round ends, and the picked one widens into a full pill.
+/// round ends, and the picked one widens into a full pill as it [grown]s.
 class const _StyleBand({
   required final Map<Channel, TonalPalette> palettes,
-  required final bool selected,
+  required final double grown,
   required final double width,
   required final bool first,
   required final bool last,
@@ -353,22 +410,17 @@ class const _StyleBand({
   @override
   Widget build(BuildContext context) {
     const duration = Duration(milliseconds: 220);
-    const spring = SpringCurve.fastSpatial;
     final primary = Color(palettes[Channel.primary]!.get(60));
+    final g = grown.clamp(0.0, 1.0);
     final round = Radius.circular(math.min(width / 2, 18));
-    const tight = Radius.circular(6);
+    final inner = Radius.lerp(const Radius.circular(6), round, g)!;
     return Tooltip(
       message: tooltip,
-      child: AnimatedContainer(
-        duration: spring.duration,
-        curve: spring,
+      child: Container(
         width: width,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.horizontal(
-            left: selected || first ? round : tight,
-            right: selected || last ? round : tight,
-          ),
+          borderRadius: BorderRadius.horizontal(left: first ? round : inner, right: last ? round : inner),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -379,13 +431,10 @@ class const _StyleBand({
                 duration: duration,
                 color: primary,
                 alignment: Alignment.center,
-                child: AnimatedScale(
-                  duration: spring.duration,
-                  curve: spring,
-                  scale: selected ? 1 : 0.4,
-                  child: AnimatedOpacity(
-                    duration: duration,
-                    opacity: selected ? 1 : 0,
+                child: Opacity(
+                  opacity: g,
+                  child: Transform.scale(
+                    scale: 0.4 + 0.6 * grown,
                     child: Icon(Icons.check_rounded, size: 18, color: primary.ink),
                   ),
                 ),
@@ -531,6 +580,15 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
                     opened: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: StudioIconButton(
+                            icon: state.mixerRows ? Icons.view_column_rounded : Icons.table_rows_rounded,
+                            tooltip: state.mixerRows ? 'Stand the channels up' : 'Lay the channels down as rows',
+                            size: 32,
+                            onTap: () => cubit.setMixerRows(!state.mixerRows),
+                          ),
+                        ),
                         AnimatedSwitcher(
                           duration: const Duration(milliseconds: 200),
                           transitionBuilder: (child, animation) => FadeTransition(
