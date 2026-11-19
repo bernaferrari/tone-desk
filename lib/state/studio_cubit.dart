@@ -21,6 +21,9 @@ class const StudioState({
   /// Shows every channel strip instead of the three simple knobs.
   final bool mixerOpen = false,
 
+  /// Lays the mixer out as horizontal rows instead of a desk of vertical strips.
+  final bool mixerRows = false,
+
   /// The channel the inspector last pointed at, to light up on the desk.
   final Channel? spotlight,
   final int spotlightTick = 0,
@@ -37,6 +40,7 @@ class const StudioState({
     ExportFormat? exportFormat,
     bool? inspecting,
     bool? mixerOpen,
+    bool? mixerRows,
     Channel? Function()? spotlight,
     int? spotlightTick,
     List<ThemeRecipe>? undoStack,
@@ -47,6 +51,7 @@ class const StudioState({
     exportFormat: exportFormat ?? this.exportFormat,
     inspecting: inspecting ?? this.inspecting,
     mixerOpen: mixerOpen ?? this.mixerOpen,
+    mixerRows: mixerRows ?? this.mixerRows,
     spotlight: spotlight != null ? spotlight() : this.spotlight,
     spotlightTick: spotlightTick ?? this.spotlightTick,
     undoStack: undoStack ?? this.undoStack,
@@ -60,6 +65,7 @@ class const StudioState({
     exportFormat,
     inspecting,
     mixerOpen,
+    mixerRows,
     spotlight,
     spotlightTick,
     undoStack,
@@ -85,7 +91,11 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
         final json = jsonDecode(raw) as Map<String, Object?>;
         final recipe = ThemeRecipe.fromJson(json['recipe'] as Map<String, Object?>);
         if (recipe != null) {
-          restored = StudioState(recipe: recipe, brightness: json['dark'] == true ? Brightness.dark : Brightness.light);
+          restored = StudioState(
+            recipe: recipe,
+            brightness: json['dark'] == true ? Brightness.dark : Brightness.light,
+            mixerRows: json['rows'] == true,
+          );
         }
       }
     } catch (_) {
@@ -99,13 +109,15 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
     super.onChange(change);
     final prev = change.currentState;
     final next = change.nextState;
-    if (_scrubStart == null && (prev.recipe != next.recipe || prev.brightness != next.brightness)) {
+    if (_scrubStart == null &&
+        (prev.recipe != next.recipe || prev.brightness != next.brightness || prev.mixerRows != next.mixerRows)) {
       _save(next);
     }
   }
 
-  void _save(StudioState s) =>
-      unawaited(_prefs?.setString(_storageKey, jsonEncode({'recipe': s.recipe.toJson(), 'dark': s.isDark})));
+  void _save(StudioState s) => unawaited(
+    _prefs?.setString(_storageKey, jsonEncode({'recipe': s.recipe.toJson(), 'dark': s.isDark, 'rows': s.mixerRows})),
+  );
 
   // Recipe edits.
 
@@ -221,6 +233,8 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
   void setExportFormat(ExportFormat format) => emit(state.copyWith(exportFormat: format));
 
   void setMixerOpen(bool open) => emit(state.copyWith(mixerOpen: open));
+
+  void setMixerRows(bool rows) => emit(state.copyWith(mixerRows: rows));
 
   void toggleInspecting() => emit(state.copyWith(inspecting: !state.inspecting));
 

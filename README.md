@@ -33,6 +33,7 @@ Open **More options** when a brand needs its own colors. Each of the six tonal p
 - **Turn the knob** to shift its hue, and **slide the fader** for more or less color.
 - **Tap the knob** to type a brand color or dial one in. Its hue and colorfulness set the palette, and each role keeps Material's lightness, so text on it stays readable.
 - **Tap the eye** to turn a palette gray and see what it paints.
+- **Lay the strips down** as rows, from the button beside Done, for longer faders.
 
 A palette drives a family of roles: primary also sets `onPrimary`, `primaryContainer`, `inversePrimary` and the fixed colors. Hover a strip's name to see them all.
 

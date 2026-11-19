@@ -198,8 +198,8 @@ class _KnobPainter({
       !_sameColors(old.ring, ring);
 }
 
-/// A channel fader: a vertical track that fills with color up to its cap,
-/// over a printed scale. Tap to jump, drag to slide, double-tap to reset.
+/// A channel fader: a track that fills with color up to its cap, over a
+/// printed scale. Tap to jump, drag to slide, double-tap to reset.
 class const Fader({
   super.key,
   required final double value,
@@ -209,6 +209,11 @@ class const Fader({
   final VoidCallback? onStart,
   final VoidCallback? onEnd,
   final VoidCallback? onReset,
+
+  /// Vertical faders grow upward, horizontal ones to the right.
+  final Axis axis = Axis.vertical,
+
+  /// How long a vertical fader is. A horizontal one fills its width.
   final double height = 132,
 
   /// The ring that sets the cap off from what's behind it.
@@ -231,9 +236,14 @@ class _FaderState() extends State<Fader> {
     super.dispose();
   }
 
-  double _valueAt(double dy) {
+  static const _thickness = 40.0;
+
+  double _valueAt(Offset p, Size size) {
     const cap = _FaderPainter.capHeight;
-    var v = (1 - (dy - cap / 2) / (widget.height - cap)).clamp(0.0, 1.0);
+    final along = widget.axis == Axis.vertical
+        ? 1 - (p.dy - cap / 2) / (size.height - cap)
+        : (p.dx - cap / 2) / (size.width - cap);
+    var v = along.clamp(0.0, 1.0);
     if (widget.unity case final u? when (v - u).abs() < 0.03) {
       if (v != u) HapticFeedback.selectionClick();
       v = u;
@@ -246,7 +256,21 @@ class _FaderState() extends State<Fader> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    void update(Offset p) => widget.onChanged(_valueAt(p.dy));
+    final vertical = widget.axis == Axis.vertical;
+    void update(Offset p) => widget.onChanged(_valueAt(p, context.size!));
+    void start(DragStartDetails d) {
+      _cursor.show(context, SystemMouseCursors.grabbing);
+      setState(() => _active = true);
+      widget.onStart?.call();
+      update(d.localPosition);
+    }
+
+    void end(DragEndDetails _) {
+      _cursor.hide();
+      setState(() => _active = false);
+      widget.onEnd?.call();
+    }
+
     return Semantics(
       slider: true,
       label: widget.semanticLabel,
@@ -262,31 +286,26 @@ class _FaderState() extends State<Fader> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onDoubleTap: widget.onReset,
-          onVerticalDragStart: (d) {
-            _cursor.show(context, SystemMouseCursors.grabbing);
-            setState(() => _active = true);
-            widget.onStart?.call();
-            update(d.localPosition);
-          },
-          onVerticalDragUpdate: (d) => update(d.localPosition),
-          onVerticalDragEnd: (_) {
-            _cursor.hide();
-            setState(() => _active = false);
-            widget.onEnd?.call();
-          },
+          onVerticalDragStart: vertical ? start : null,
+          onVerticalDragUpdate: vertical ? (d) => update(d.localPosition) : null,
+          onVerticalDragEnd: vertical ? end : null,
+          onHorizontalDragStart: vertical ? null : start,
+          onHorizontalDragUpdate: vertical ? null : (d) => update(d.localPosition),
+          onHorizontalDragEnd: vertical ? null : end,
           onTapUp: (d) {
             widget.onStart?.call();
             update(d.localPosition);
             widget.onEnd?.call();
           },
           child: SizedBox(
-            height: widget.height,
+            height: vertical ? widget.height : _thickness,
             width: double.infinity,
             child: Glide(
               value: widget.value,
               instant: _active,
               builder: (value) => CustomPaint(
                 painter: _FaderPainter(
+                  axis: widget.axis,
                   value: value,
                   unity: widget.unity,
                   range: [for (var i = 0; i < 12; i++) widget.colorAt(i / 11)],
@@ -305,6 +324,7 @@ class _FaderState() extends State<Fader> {
 }
 
 class _FaderPainter({
+  required final Axis axis,
   required final double value,
   required final double? unity,
   required final List<Color> range,
@@ -316,8 +336,24 @@ class _FaderPainter({
   static const capHeight = 18.0;
   static const _track = 10.0;
 
+  /// Paints standing up; a horizontal fader is the same fader turned a
+  /// quarter clockwise, so its bottom lands on the left.
   @override
   void paint(Canvas canvas, Size size) {
+    if (axis == Axis.horizontal) {
+      canvas
+        ..save()
+        ..translate(size.width, 0)
+        ..rotate(math.pi / 2);
+      _paint(canvas, size.flipped, const Offset(1, 0));
+      canvas.restore();
+    } else {
+      _paint(canvas, size, const Offset(0, 1));
+    }
+  }
+
+  /// [down] is the screen's down in the painting's own frame, for shadows.
+  void _paint(Canvas canvas, Size size, Offset down) {
     final cx = size.width / 2;
     const top = capHeight / 2;
     final bottom = size.height - capHeight / 2;
@@ -371,7 +407,7 @@ class _FaderPainter({
       const Radius.circular(capHeight / 2),
     );
     canvas.drawRRect(
-      cap.shift(Offset(0, lifted ? 3 : 1.5)),
+      cap.shift(down * (lifted ? 3 : 1.5)),
       Paint()
         ..color = const Color(0x40000000)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, lifted ? 5 : 3),
@@ -390,6 +426,7 @@ class _FaderPainter({
 
   @override
   bool shouldRepaint(_FaderPainter old) =>
+      old.axis != axis ||
       old.value != value ||
       old.unity != unity ||
       old.lifted != lifted ||

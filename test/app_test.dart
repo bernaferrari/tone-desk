@@ -1,8 +1,10 @@
 import 'package:tone_desk/main.dart';
 import 'package:tone_desk/model/recipe.dart';
 import 'package:tone_desk/state/studio_cubit.dart';
+import 'package:tone_desk/ui/controls.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:material_ui/material_ui.dart';
 
 void main() {
@@ -38,6 +40,25 @@ void main() {
     expect(cubit.state.recipe.variant.mood, 'Wild');
   });
 
+  testWidgets('only the old and new picks move as the colorful strip changes', (tester) async {
+    final cubit = await boot(tester);
+    final first = find.byTooltip('Gray · Monochrome');
+    final last = find.byTooltip('Wild · Fruit salad');
+    final left = tester.getRect(first).left;
+    final right = tester.getRect(last).right;
+    final width = tester.getSize(last).width;
+    for (final v in [Variant.fidelity, Variant.vibrant, Variant.expressive, Variant.neutral]) {
+      cubit.setVariant(v);
+      for (var frame = 0; frame < 6; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.getRect(first).left, closeTo(left, 0.01));
+        expect(tester.getRect(last).right, closeTo(right, 0.01));
+        expect(tester.getSize(last).width, closeTo(width, 0.01));
+      }
+    }
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('more options opens the mixer, done folds it away', (tester) async {
     final cubit = await boot(tester);
     await tester.ensureVisible(find.text('More options'));
@@ -57,6 +78,29 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(cubit.state.mixerOpen, isFalse);
+  });
+
+  testWidgets('the mixer lays its channels down as rows, and back', (tester) async {
+    final cubit = await boot(tester);
+    cubit.setMixerOpen(true);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Lay the channels down as rows'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.mixerRows, isTrue);
+
+    final fader = find.byType(Fader).first;
+    await tester.ensureVisible(fader);
+    await tester.pumpAndSettle();
+    final box = tester.getRect(fader);
+    await tester.dragFrom(box.centerLeft + const Offset(12, 0), Offset(box.width - 24, 0));
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.mixOf(Channel.primary).chroma, greaterThan(40));
+
+    await tester.ensureVisible(find.byTooltip('Stand the channels up'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Stand the channels up'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.mixerRows, isFalse);
   });
 
   testWidgets('space shuffles and undo brings the seed back', (tester) async {
