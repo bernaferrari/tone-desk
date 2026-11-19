@@ -46,182 +46,6 @@ class const Glide({
   }
 }
 
-/// A horizontal slider whose track is a gradient sampled along its range,
-/// with a lens showing the color under it. Tap to jump, drag to slide,
-/// double-tap to reset.
-class const BandSlider({
-  super.key,
-  required final double value,
-  required final Color Function(double t) colorAt,
-  required final ValueChanged<double> onChanged,
-  final double? unity,
-  final VoidCallback? onStart,
-  final VoidCallback? onEnd,
-  final VoidCallback? onReset,
-  final double height = 28,
-
-  /// How many colors to sample along the track's gradient.
-  final int? bands,
-  final String? semanticLabel,
-  final String? semanticValue,
-}) extends StatefulWidget {
-  @override
-  State<BandSlider> createState() => _BandSliderState();
-}
-
-class _BandSliderState() extends State<BandSlider> {
-  final _cursor = DragCursor();
-  bool _active = false;
-  bool _hovered = false;
-  static const _lens = 18.0;
-
-  @override
-  void dispose() {
-    _cursor.hide();
-    super.dispose();
-  }
-
-  double _valueAt(double dx, double width) {
-    var v = ((dx - _lens / 2) / (width - _lens)).clamp(0.0, 1.0);
-    if (widget.unity case final u? when (v - u).abs() < 0.02) {
-      if (v != u) HapticFeedback.selectionClick();
-      v = u;
-    }
-    return v;
-  }
-
-  void _nudge(double by) => widget.onChanged((widget.value + by).clamp(0.0, 1.0));
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      slider: true,
-      label: widget.semanticLabel,
-      value: widget.semanticValue,
-      increasedValue: '${((widget.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
-      decreasedValue: '${((widget.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
-      onIncrease: () => _nudge(0.05),
-      onDecrease: () => _nudge(-0.05),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final count = widget.bands ?? 24;
-          final bands = [for (var i = 0; i < count; i++) widget.colorAt(i / (count - 1))];
-          void update(Offset p) => widget.onChanged(_valueAt(p.dx, w));
-          return MouseRegion(
-            cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit: (_) => setState(() => _hovered = false),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onDoubleTap: widget.onReset,
-              onHorizontalDragStart: (d) {
-                _cursor.show(context, SystemMouseCursors.grabbing);
-                setState(() => _active = true);
-                widget.onStart?.call();
-                update(d.localPosition);
-              },
-              onHorizontalDragUpdate: (d) => update(d.localPosition),
-              onHorizontalDragEnd: (_) {
-                _cursor.hide();
-                setState(() => _active = false);
-                widget.onEnd?.call();
-              },
-              onTapUp: (d) {
-                widget.onStart?.call();
-                update(d.localPosition);
-                widget.onEnd?.call();
-              },
-              child: SizedBox(
-                height: widget.height + 10,
-                child: Glide(
-                  value: widget.value,
-                  instant: _active,
-                  builder: (value) => CustomPaint(
-                    size: Size.infinite,
-                    painter: _BandPainter(
-                      value: value,
-                      unity: widget.unity,
-                      bands: bands,
-                      lensColor: widget.colorAt(value),
-                      rim: colors.surfaceContainerLowest,
-                      tick: colors.onSurface,
-                      lifted: _active || _hovered,
-                      track: widget.height,
-                      lens: _lens,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _BandPainter({
-  required final double value,
-  required final double? unity,
-  required final List<Color> bands,
-  required final Color lensColor,
-  required final Color rim,
-  required final Color tick,
-  required final bool lifted,
-  required final double track,
-  required final double lens,
-}) extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final top = (size.height - track) / 2;
-    final trackRect = RRect.fromRectAndRadius(Rect.fromLTWH(0, top, size.width, track), Radius.circular(track / 2));
-    canvas.drawRRect(
-      trackRect,
-      Paint()
-        ..shader = LinearGradient(
-          colors: bands,
-          stops: [for (var i = 0; i < bands.length; i++) bands.length == 1 ? 0 : i / (bands.length - 1)],
-        ).createShader(trackRect.outerRect),
-    );
-
-    double xOf(double v) => lens / 2 + (size.width - lens) * v;
-    if (unity case final u?) {
-      final x = xOf(u);
-      canvas.drawLine(
-        Offset(x, top + track * 0.3),
-        Offset(x, top + track * 0.7),
-        Paint()
-          ..color = tick.withValues(alpha: 0.55)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    final lensRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(xOf(value), size.height / 2), width: lens + (lifted ? 2 : 0), height: size.height),
-      const Radius.circular(9),
-    );
-    canvas.drawRRect(
-      lensRect.shift(Offset(0, lifted ? 3 : 1.5)),
-      Paint()
-        ..color = const Color(0x40000000)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, lifted ? 5 : 3),
-    );
-    canvas.drawRRect(lensRect, Paint()..color = rim);
-    canvas.drawRRect(lensRect.deflate(3), Paint()..color = lensColor);
-  }
-
-  @override
-  bool shouldRepaint(_BandPainter old) =>
-      old.value != value ||
-      old.unity != unity ||
-      old.lifted != lifted ||
-      old.lensColor != lensColor ||
-      !_sameColors(old.bands, bands);
-}
-
 bool _sameColors(List<Color> a, List<Color> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -230,18 +54,23 @@ bool _sameColors(List<Color> a, List<Color> b) {
   return true;
 }
 
-/// A rotary hue knob. Drag it sideways or up and down.
+/// A rotary hue knob, a sibling of [TickKnob]: its ring of ticks is the color
+/// wheel, and its cap wears the color it makes. Drag it sideways or up and down.
 class const HueKnob({
   super.key,
   required final double hue,
   required final List<Color> ring,
   required final ValueChanged<double> onChanged,
+  final String label = 'Hue',
   final double? unity,
   final VoidCallback? onStart,
   final VoidCallback? onEnd,
   final VoidCallback? onReset,
   final double size = 52,
   final Color? center,
+
+  /// The ring that sets the cap off from what's behind it.
+  final Color? rim,
   final VoidCallback? onTap,
 }) extends StatefulWidget {
   @override
@@ -251,6 +80,7 @@ class const HueKnob({
 class _HueKnobState() extends State<HueKnob> {
   final _cursor = DragCursor();
   bool _active = false;
+  bool _hovered = false;
 
   @override
   void dispose() {
@@ -263,7 +93,7 @@ class _HueKnobState() extends State<HueKnob> {
     final colors = Theme.of(context).colorScheme;
     return Semantics(
       slider: true,
-      label: 'Hue',
+      label: widget.label,
       value: '${widget.hue.round()} degrees',
       increasedValue: '${((widget.hue + 5) % 360).round()} degrees',
       decreasedValue: '${((widget.hue - 5) % 360).round()} degrees',
@@ -271,6 +101,8 @@ class _HueKnobState() extends State<HueKnob> {
       onDecrease: () => widget.onChanged((widget.hue - 5) % 360),
       child: MouseRegion(
         cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
           onDoubleTap: widget.onReset,
@@ -285,18 +117,23 @@ class _HueKnobState() extends State<HueKnob> {
             setState(() => _active = false);
             widget.onEnd?.call();
           },
-          child: Glide(
-            value: widget.hue,
-            instant: _active,
-            builder: (hue) => CustomPaint(
-              size: Size.square(widget.size),
-              painter: _KnobPainter(
-                hue: hue,
-                unity: widget.unity,
-                ring: widget.ring,
-                body: widget.center ?? colors.surfaceContainerLowest,
-                ink: widget.center?.ink ?? colors.onSurface,
-                tick: colors.onSurfaceVariant,
+          child: AnimatedScale(
+            scale: _active ? 1.06 : 1,
+            duration: const Duration(milliseconds: 160),
+            child: Glide(
+              value: widget.hue,
+              instant: _active,
+              builder: (hue) => CustomPaint(
+                size: Size.square(widget.size),
+                painter: _KnobPainter(
+                  hue: hue,
+                  unity: widget.unity,
+                  ring: widget.ring,
+                  body: widget.center ?? colors.surfaceContainerLowest,
+                  ink: widget.center?.ink ?? colors.onSurface,
+                  rim: widget.rim ?? colors.surfaceContainerLowest,
+                  lifted: _hovered || _active,
+                ),
               ),
             ),
           ),
@@ -312,54 +149,253 @@ class _KnobPainter({
   required final List<Color> ring,
   required final Color body,
   required final Color ink,
-  required final Color tick,
+  required final Color rim,
+  required final bool lifted,
 }) extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.width / 2;
-    final ringRect = Rect.fromCircle(center: c, radius: r - 3);
-    canvas.drawCircle(
-      c,
-      r - 3,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..shader = SweepGradient(
-          colors: [...ring, ring.first],
-          transform: const GradientRotation(-math.pi / 2),
-        ).createShader(ringRect),
-    );
-    canvas.drawCircle(
-      c.translate(0, 1.5),
-      r - 9,
-      Paint()
-        ..color = const Color(0x2A000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-    );
-    canvas.drawCircle(c, r - 9, Paint()..color = body);
-
     Offset at(double deg, double radius) {
       final rad = (deg - 90) * math.pi / 180;
       return c + Offset(math.cos(rad), math.sin(rad)) * radius;
     }
 
-    if (unity != null) {
-      canvas.drawCircle(at(unity!, r - 3), 2, Paint()..color = tick);
+    final step = 360 / ring.length;
+    final home = unity == null ? null : (unity! / step).round() % ring.length;
+    for (var i = 0; i < ring.length; i++) {
+      final isHome = i == home;
+      canvas.drawLine(
+        at(i * step, r - (isHome ? 7.5 : 5)),
+        at(i * step, r - 1),
+        Paint()
+          ..color = ring[i]
+          ..strokeWidth = isHome ? 2.4 : 1.7
+          ..strokeCap = StrokeCap.round,
+      );
     }
-    canvas.drawLine(
-      at(hue, r * 0.18),
-      at(hue, r - 13),
+
+    final capR = r - 9;
+    canvas.drawCircle(
+      c.translate(0, lifted ? 3 : 2),
+      capR,
       Paint()
-        ..color = ink
-        ..strokeWidth = 2.5
+        ..color = const Color(0x38000000)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, lifted ? 5 : 3),
+    );
+    canvas.drawCircle(c, capR + 1.5, Paint()..color = rim);
+    canvas.drawCircle(c, capR, Paint()..color = body);
+    canvas.drawCircle(at(hue, capR * 0.62), 2.6, Paint()..color = ink);
+  }
+
+  @override
+  bool shouldRepaint(_KnobPainter old) =>
+      old.hue != hue ||
+      old.unity != unity ||
+      old.body != body ||
+      old.lifted != lifted ||
+      old.rim != rim ||
+      !_sameColors(old.ring, ring);
+}
+
+/// A channel fader: a vertical track that fills with color up to its cap,
+/// over a printed scale. Tap to jump, drag to slide, double-tap to reset.
+class const Fader({
+  super.key,
+  required final double value,
+  required final Color Function(double t) colorAt,
+  required final ValueChanged<double> onChanged,
+  final double? unity,
+  final VoidCallback? onStart,
+  final VoidCallback? onEnd,
+  final VoidCallback? onReset,
+  final double height = 132,
+
+  /// The ring that sets the cap off from what's behind it.
+  final Color? rim,
+  final String? semanticLabel,
+  final String? semanticValue,
+}) extends StatefulWidget {
+  @override
+  State<Fader> createState() => _FaderState();
+}
+
+class _FaderState() extends State<Fader> {
+  final _cursor = DragCursor();
+  bool _active = false;
+  bool _hovered = false;
+
+  @override
+  void dispose() {
+    _cursor.hide();
+    super.dispose();
+  }
+
+  double _valueAt(double dy) {
+    const cap = _FaderPainter.capHeight;
+    var v = (1 - (dy - cap / 2) / (widget.height - cap)).clamp(0.0, 1.0);
+    if (widget.unity case final u? when (v - u).abs() < 0.03) {
+      if (v != u) HapticFeedback.selectionClick();
+      v = u;
+    }
+    return v;
+  }
+
+  void _nudge(double by) => widget.onChanged((widget.value + by).clamp(0.0, 1.0));
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    void update(Offset p) => widget.onChanged(_valueAt(p.dy));
+    return Semantics(
+      slider: true,
+      label: widget.semanticLabel,
+      value: widget.semanticValue,
+      increasedValue: '${((widget.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
+      decreasedValue: '${((widget.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
+      onIncrease: () => _nudge(0.05),
+      onDecrease: () => _nudge(-0.05),
+      child: MouseRegion(
+        cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: widget.onReset,
+          onVerticalDragStart: (d) {
+            _cursor.show(context, SystemMouseCursors.grabbing);
+            setState(() => _active = true);
+            widget.onStart?.call();
+            update(d.localPosition);
+          },
+          onVerticalDragUpdate: (d) => update(d.localPosition),
+          onVerticalDragEnd: (_) {
+            _cursor.hide();
+            setState(() => _active = false);
+            widget.onEnd?.call();
+          },
+          onTapUp: (d) {
+            widget.onStart?.call();
+            update(d.localPosition);
+            widget.onEnd?.call();
+          },
+          child: SizedBox(
+            height: widget.height,
+            width: double.infinity,
+            child: Glide(
+              value: widget.value,
+              instant: _active,
+              builder: (value) => CustomPaint(
+                painter: _FaderPainter(
+                  value: value,
+                  unity: widget.unity,
+                  range: [for (var i = 0; i < 12; i++) widget.colorAt(i / 11)],
+                  capColor: widget.colorAt(value),
+                  rim: widget.rim ?? colors.surfaceContainerLowest,
+                  scale: colors.onSurface,
+                  lifted: _active || _hovered,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FaderPainter({
+  required final double value,
+  required final double? unity,
+  required final List<Color> range,
+  required final Color capColor,
+  required final Color rim,
+  required final Color scale,
+  required final bool lifted,
+}) extends CustomPainter {
+  static const capHeight = 18.0;
+  static const _track = 10.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    const top = capHeight / 2;
+    final bottom = size.height - capHeight / 2;
+    double yOf(double v) => bottom - (bottom - top) * v;
+
+    final marks = Paint()
+      ..color = scale.withValues(alpha: 0.22)
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i <= 10; i++) {
+      final y = yOf(i / 10);
+      final long = i % 5 == 0;
+      for (final side in [-1.0, 1.0]) {
+        final from = cx + side * (_track / 2 + 4);
+        canvas.drawLine(Offset(from, y), Offset(from + side * (long ? 5 : 3), y), marks);
+      }
+    }
+    if (unity case final u?) {
+      final y = yOf(u);
+      final home = Paint()
+        ..color = scale.withValues(alpha: 0.7)
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+      for (final side in [-1.0, 1.0]) {
+        final from = cx + side * (_track / 2 + 4);
+        canvas.drawLine(Offset(from, y), Offset(from + side * 7, y), home);
+      }
+    }
+
+    final trackRect = Rect.fromLTRB(cx - _track / 2, top - _track / 2, cx + _track / 2, bottom + _track / 2);
+    final track = RRect.fromRectAndRadius(trackRect, const Radius.circular(_track / 2));
+    canvas.drawRRect(
+      track,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [for (final c in range) c.withValues(alpha: 0.3)],
+          stops: [for (var i = 0; i < range.length; i++) i / (range.length - 1)],
+        ).createShader(trackRect),
+    );
+    final y = yOf(value);
+    canvas.save();
+    canvas.clipRect(Rect.fromLTRB(0, y, size.width, size.height));
+    canvas.drawRRect(track, Paint()..color = capColor);
+    canvas.restore();
+
+    final width = math.min(size.width - 6, 34.0) + (lifted ? 2 : 0);
+    final cap = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(cx, y), width: width, height: capHeight),
+      const Radius.circular(capHeight / 2),
+    );
+    canvas.drawRRect(
+      cap.shift(Offset(0, lifted ? 3 : 1.5)),
+      Paint()
+        ..color = const Color(0x40000000)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, lifted ? 5 : 3),
+    );
+    canvas.drawRRect(cap, Paint()..color = rim);
+    canvas.drawRRect(cap.deflate(3), Paint()..color = capColor);
+    canvas.drawLine(
+      Offset(cx - 6, y),
+      Offset(cx + 6, y),
+      Paint()
+        ..color = capColor.ink.withValues(alpha: 0.6)
+        ..strokeWidth = 1.6
         ..strokeCap = StrokeCap.round,
     );
   }
 
   @override
-  bool shouldRepaint(_KnobPainter old) =>
-      old.hue != hue || old.unity != unity || old.body != body || !_sameColors(old.ring, ring);
+  bool shouldRepaint(_FaderPainter old) =>
+      old.value != value ||
+      old.unity != unity ||
+      old.lifted != lifted ||
+      old.capColor != capColor ||
+      old.rim != rim ||
+      !_sameColors(old.range, range);
 }
 
 /// A knob with a ring of ticks. Drag up or right to turn it, or scroll.

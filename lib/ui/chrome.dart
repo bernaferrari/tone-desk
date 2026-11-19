@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_ui/material_ui.dart';
@@ -43,6 +45,30 @@ TextStyle monoStyle(double size, {Color? color, FontWeight weight = FontWeight.w
     fontFeatures: const [FontFeature.tabularFigures()],
   );
   return _fetch() ? GoogleFonts.geistMono(textStyle: style) : style.copyWith(fontFamily: 'monospace');
+}
+
+/// An underdamped spring (damping below 1) as a curve, to drive implicit
+/// animations with Material Expressive motion. Pair it with [duration], when
+/// it has come to rest.
+class const SpringCurve({final double damping = 0.6, final double stiffness = 800}) extends Curve {
+  /// M3 Expressive's fast spatial spring, for small things that move or resize.
+  static const fastSpatial = SpringCurve();
+
+  /// M3 Expressive's default spatial spring, for larger moves.
+  static const defaultSpatial = SpringCurve(damping: 0.8, stiffness: 380);
+
+  /// Long enough for the motion to fall under a quarter of a percent.
+  Duration get duration =>
+      Duration(microseconds: (6 / (damping * math.sqrt(stiffness)) * Duration.microsecondsPerSecond).round());
+
+  @override
+  double transformInternal(double t) {
+    final omega = math.sqrt(stiffness);
+    final decay = damping * omega;
+    final ringing = omega * math.sqrt(1 - damping * damping);
+    final s = t * duration.inMicroseconds / Duration.microsecondsPerSecond;
+    return 1 - math.exp(-decay * s) * (math.cos(ringing * s) + decay / ringing * math.sin(ringing * s));
+  }
 }
 
 /// Small uppercase label, like the silk-screen on a mixing desk.

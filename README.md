@@ -25,12 +25,12 @@ The preview is real Material 3 widgets on five screens: a music recap, a profile
 ## The mixer, for brand colors
 
 <p align="center">
-  <img src="docs/screenshots/mixer.webp" width="100%" alt="The mixer in the dark studio: six palettes, each with a hue knob and a chroma slider, beside two pink phone previews">
+  <img src="docs/screenshots/mixer.webp" width="100%" alt="The mixer in the dark studio: six channel strips, each with a hue knob over a color fader, beside two pink phone previews">
 </p>
 
-Open **More options** when a brand needs exact colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own strip:
+Open **More options** when a brand needs exact colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own channel strip, like a mixing desk:
 
-- **Turn the knob** to shift its hue, and **slide** for more or less color.
+- **Turn the knob** to shift its hue, and **slide the fader** for more or less color.
 - **Tap the knob** to set an exact color with hue, chroma and tone reels or a hex.
 - **Tap the eye** to turn a palette gray and see what it paints.
 
