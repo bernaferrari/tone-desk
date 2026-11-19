@@ -69,9 +69,12 @@ StudioScheme resolveScheme(ThemeRecipe recipe, Brightness brightness) {
   for (final channel in Channel.values) {
     final style = stylePalettes[channel]!;
     final mix = recipe.mixOf(channel);
-    palettes[channel] = mix.isUnity
-        ? style
-        : TonalPalette.of(mix.hue ?? style.hue, mix.muted ? 0 : (mix.chroma ?? style.chroma));
+    final chroma = switch (mix) {
+      ChannelMix(muted: true) => 0.0,
+      ChannelMix(chroma: final c?) => c * recipe.scaleOf(channel),
+      _ => style.chroma,
+    };
+    palettes[channel] = mix.isUnity ? style : TonalPalette.of(mix.hue ?? style.hue, chroma);
   }
 
   final scheme = DynamicScheme(

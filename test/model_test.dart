@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:tone_desk/model/color_math.dart';
 import 'package:tone_desk/model/exporters.dart';
 import 'package:tone_desk/model/recipe.dart';
 import 'package:tone_desk/model/scheme_engine.dart';
+import 'package:tone_desk/state/studio_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:material_ui/material_ui.dart';
@@ -44,6 +47,38 @@ void main() {
       final muted = resolveScheme(recipe.withMix(Channel.primary, const ChannelMix(muted: true)), Brightness.light);
       expect(isGray(muted.colors.primary), isTrue);
       expect(muted.colors.tertiary.hct.chroma, greaterThan(10));
+    });
+
+    test('vivid keeps scaling a palette after its fader moves', () {
+      final mixed = recipe.withMix(Channel.primary, const ChannelMix(chroma: 30));
+      double chromaAt(double vivid) =>
+          resolveScheme(mixed.copyWith(vivid: vivid), Brightness.light).palettes[Channel.primary]!.chroma;
+      expect(chromaAt(1), 30);
+      expect(chromaAt(1.5), 45);
+      expect(chromaAt(0), 0);
+    });
+  });
+
+  group('StudioCubit', () {
+    test('a fader shows what was dragged, at any vivid', () {
+      final cubit =
+          StudioCubit(
+              initial: StudioState(recipe: const ThemeRecipe(seed: Color(0xFF6B3BFF))),
+            )
+            ..setVivid(1.5)
+            ..setChannelChroma(Channel.primary, 36);
+      expect(resolveScheme(cubit.state.recipe, Brightness.light).palettes[Channel.primary]!.chroma, closeTo(36, 1e-9));
+
+      cubit
+        ..setVivid(0)
+        ..setVivid(1.5);
+      expect(resolveScheme(cubit.state.recipe, Brightness.light).palettes[Channel.primary]!.chroma, closeTo(36, 1e-9));
+
+      cubit.plugChannel(Channel.tertiary, hue: 200, chroma: 50);
+      final tertiary = resolveScheme(cubit.state.recipe, Brightness.light).palettes[Channel.tertiary]!;
+      expect(tertiary.hue, 200);
+      expect(tertiary.chroma, closeTo(50, 1e-9));
+      unawaited(cubit.close());
     });
   });
 

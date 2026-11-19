@@ -604,25 +604,50 @@ Future<Color?> askForColor(
   required Color initial,
   String action = 'Use color',
 }) {
+  final hct = Hct.fromInt(initial.toARGB32());
   return showDialog<Color>(
     context: context,
-    builder: (context) => _ColorDialog(title: title, initial: initial, action: action),
+    builder: (context) => _ColorDialog(title: title, action: action, hue: hct.hue, chroma: hct.chroma, tone: hct.tone),
   );
 }
 
-class const _ColorDialog({required final String title, required final Color initial, required final String action})
-    extends StatefulWidget {
+/// Asks for the hue and chroma of a palette, previewed at [tone], the way the
+/// theme will show it. A typed color gives its hue and chroma; its tone is the
+/// scheme's to pick.
+Future<({double hue, double chroma})?> askForPaletteColor(
+  BuildContext context, {
+  required String title,
+  required double hue,
+  required double chroma,
+  required double tone,
+  String action = 'Use it',
+}) {
+  return showDialog<({double hue, double chroma})>(
+    context: context,
+    builder: (context) =>
+        _ColorDialog(title: title, action: action, hue: hue, chroma: chroma, tone: tone, palette: true),
+  );
+}
+
+class const _ColorDialog({
+  required final String title,
+  required final String action,
+  required final double hue,
+  required final double chroma,
+  required final double tone,
+  final bool palette = false,
+}) extends StatefulWidget {
   @override
   State<_ColorDialog> createState() => _ColorDialogState();
 }
 
 class _ColorDialogState() extends State<_ColorDialog> {
   static const _maxChroma = 120.0;
-  late final _controller = TextEditingController(text: widget.initial.hex);
-  late Hct _hct = Hct.fromInt(widget.initial.toARGB32());
-  late double _hue = _hct.hue;
-  late double _chroma = _hct.chroma;
-  late double _tone = _hct.tone;
+  late double _hue = widget.hue;
+  late double _chroma = widget.chroma;
+  late double _tone = widget.tone;
+  late Hct _hct = Hct.from(_hue, _chroma, _tone);
+  late final _controller = TextEditingController(text: _color.hex);
   bool _valid = true;
 
   Color get _color => Color(_hct.toInt());
@@ -649,20 +674,23 @@ class _ColorDialogState() extends State<_ColorDialog> {
     setState(() {
       _valid = parsed != null;
       if (parsed == null) return;
-      _hct = Hct.fromInt(parsed.toARGB32());
-      _hue = _hct.hue;
-      _chroma = _hct.chroma;
-      _tone = _hct.tone;
+      final typed = Hct.fromInt(parsed.toARGB32());
+      _hue = typed.hue;
+      _chroma = typed.chroma;
+      if (!widget.palette) _tone = typed.tone;
+      _hct = Hct.from(_hue, _chroma, _tone);
     });
   }
 
   void _submit() {
-    if (_valid) Navigator.of(context).pop(_color);
+    if (!_valid) return;
+    Navigator.of(context).pop(widget.palette ? (hue: _hue, chroma: _chroma) : _color);
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final palette = widget.palette;
     final swatch = _color;
     final hueChroma = math.max(_chroma, 24.0);
     return AlertDialog(
@@ -690,6 +718,14 @@ class _ColorDialogState() extends State<_ColorDialog> {
                 ],
               ),
             ),
+            if (palette) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Its hue and colorfulness set the whole palette. Each role keeps its own lightness, '
+                'so text on it stays easy to read.',
+                style: TextStyle(fontSize: 12.5, height: 1.4, color: colors.onSurfaceVariant),
+              ),
+            ],
             const SizedBox(height: 18),
             _SliderRow(
               label: 'Hue',
@@ -710,7 +746,7 @@ class _ColorDialogState() extends State<_ColorDialog> {
             ),
             _SliderRow(
               label: 'Chroma',
-              readout: _hct.chroma.round().toString(),
+              readout: (palette ? _chroma : _hct.chroma).round().toString(),
               child: ColorReel(
                 value: _chroma.clamp(0.0, _maxChroma),
                 min: 0,
@@ -720,26 +756,27 @@ class _ColorDialogState() extends State<_ColorDialog> {
                 paletteKey: (_hue.round(), _tone.round()),
                 colorAt: (c) => Color(Hct.from(_hue, c, _tone).toInt()),
                 semanticLabel: 'Chroma',
-                semanticValue: _hct.chroma.round().toString(),
+                semanticValue: (palette ? _chroma : _hct.chroma).round().toString(),
                 onChanged: (c) => _slide(chroma: c),
               ),
             ),
-            _SliderRow(
-              label: 'Tone',
-              readout: _hct.tone.round().toString(),
-              child: ColorReel(
-                value: _tone,
-                min: 0,
-                max: 100,
-                step: 5,
-                lensColor: swatch,
-                paletteKey: (_hue.round(), _chroma.round()),
-                colorAt: (t) => Color(Hct.from(_hue, _chroma, t).toInt()),
-                semanticLabel: 'Tone',
-                semanticValue: _hct.tone.round().toString(),
-                onChanged: (t) => _slide(tone: t),
+            if (!palette)
+              _SliderRow(
+                label: 'Tone',
+                readout: _hct.tone.round().toString(),
+                child: ColorReel(
+                  value: _tone,
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  lensColor: swatch,
+                  paletteKey: (_hue.round(), _chroma.round()),
+                  colorAt: (t) => Color(Hct.from(_hue, _chroma, t).toInt()),
+                  semanticLabel: 'Tone',
+                  semanticValue: _hct.tone.round().toString(),
+                  onChanged: (t) => _slide(tone: t),
+                ),
               ),
-            ),
             const SizedBox(height: 6),
             TextField(
               controller: _controller,

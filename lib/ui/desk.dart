@@ -19,7 +19,7 @@ class const Mixer({super.key}) extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Turn a knob to shift the hue, slide a fader for more or less color. Tap a knob to set an exact color.',
+          'Turn a knob to shift the hue, slide a fader for more or less color. Tap a knob to type a color.',
           style: TextStyle(fontSize: 12.5, height: 1.4, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
@@ -87,7 +87,7 @@ class const ChannelStrip({super.key, required final Channel channel, final doubl
     final tone = state.isDark ? 70.0 : 55.0;
 
     final hue = mix.hue ?? style.hue;
-    final chroma = mix.muted ? 0.0 : (mix.chroma ?? style.chroma).clamp(0.0, channel.maxChroma);
+    final chroma = mix.muted ? 0.0 : palette.chroma.clamp(0.0, channel.maxChroma);
     final ringChroma = channel.maxChroma > 50 ? 48.0 : 24.0;
     final ring = [for (var h = 0; h < 360; h += 15) Color(Hct.from(h.toDouble(), ringChroma, tone).toInt())];
     final tint = Color(Hct.from(palette.hue, math.min(palette.chroma, 16), state.isDark ? 16 : 94).toInt());
@@ -96,13 +96,15 @@ class const ChannelStrip({super.key, required final Channel channel, final doubl
     final reach = Hct.from(hue, 200, tone).chroma.clamp(12.0, channel.maxChroma);
 
     Future<void> pick() async {
-      final color = await askForColor(
+      final picked = await askForPaletteColor(
         context,
         title: 'Your ${channel.label.toLowerCase()} color',
-        initial: key,
-        action: 'Use it',
+        hue: hue,
+        chroma: chroma,
+        tone: Hct.fromInt(key.toARGB32()).tone,
       );
-      if (color != null) cubit.plugChannel(channel, color);
+      if (picked == null || ((picked.hue - hue).abs() < 0.5 && (picked.chroma - chroma).abs() < 0.5)) return;
+      cubit.plugChannel(channel, hue: picked.hue, chroma: picked.chroma);
     }
 
     return _Spotlight(
@@ -115,7 +117,7 @@ class const ChannelStrip({super.key, required final Channel channel, final doubl
         child: Column(
           children: [
             Tooltip(
-              message: 'Turn for hue · tap to set an exact color',
+              message: 'Turn for hue · tap to type a color',
               child: HueKnob(
                 size: 42,
                 label: '${channel.label} hue',
