@@ -28,10 +28,10 @@ The preview is real Material 3 widgets on five screens: a music recap, a profile
   <img src="docs/screenshots/mixer.webp" width="100%" alt="The mixer in the dark studio: six channel strips, each with a hue knob over a color fader, beside two pink phone previews">
 </p>
 
-Open **More options** when a brand needs exact colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own channel strip, like a mixing desk:
+Open **More options** when a brand needs its own colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own channel strip, like a mixing desk:
 
 - **Turn the knob** to shift its hue, and **slide the fader** for more or less color.
-- **Tap the knob** to set an exact color with hue, chroma and tone reels or a hex.
+- **Tap the knob** to type a brand color or dial one in. Its hue and colorfulness set the palette, and each role keeps Material's lightness, so text on it stays readable.
 - **Tap the eye** to turn a palette gray and see what it paints.
 
 A palette drives a family of roles: primary also sets `onPrimary`, `primaryContainer`, `inversePrimary` and the fixed colors. Hover a strip's name to see them all.

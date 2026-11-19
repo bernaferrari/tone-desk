@@ -152,15 +152,24 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
     live: live,
   );
 
+  /// Sets the chroma a channel shows now, at the current Vivid or Surface tint.
   void setChannelChroma(Channel channel, double? chroma, {bool live = false}) => _commit(
-    state.recipe.withMix(channel, state.recipe.mixOf(channel).withChroma(chroma?.clamp(0.0, channel.maxChroma))),
+    state.recipe.withMix(
+      channel,
+      state.recipe.mixOf(channel).withChroma(chroma == null ? null : _unscaled(channel, chroma)),
+    ),
     live: live,
   );
 
-  /// Plugs an exact color into a channel: its hue and chroma drive the palette.
-  void plugChannel(Channel channel, Color color) {
-    final hct = Hct.fromInt(color.toARGB32());
-    _commit(state.recipe.withMix(channel, ChannelMix(hue: hct.hue, chroma: hct.chroma)));
+  /// Sets a channel's hue and the chroma it shows now. The scheme picks each
+  /// role's tone.
+  void plugChannel(Channel channel, {required double hue, required double chroma}) =>
+      _commit(state.recipe.withMix(channel, ChannelMix(hue: hue % 360, chroma: _unscaled(channel, chroma))));
+
+  /// At a scale of 0 every chroma shows as gray, so store it as given.
+  double _unscaled(Channel channel, double chroma) {
+    final scale = state.recipe.scaleOf(channel);
+    return chroma.clamp(0.0, channel.maxChroma) / (scale > 0 ? scale : 1);
   }
 
   void toggleMute(Channel channel) {

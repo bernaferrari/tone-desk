@@ -20,7 +20,9 @@ enum Channel(final String label, final String spec, final double maxChroma) {
 
 /// How a channel departs from what the style would generate.
 ///
-/// Null [hue] or [chroma] means "unity": the style's own value.
+/// Null [hue] or [chroma] means "unity": the style's own value. [chroma] is
+/// stored as it would be at a scale of 1, so Vivid and Surface tint keep
+/// scaling a mixed palette just like the style's own.
 @immutable
 class const ChannelMix({final double? hue, final double? chroma, final bool muted = false}) extends Equatable {
   static const unity = ChannelMix();
@@ -69,7 +71,7 @@ class const ThemeRecipe({
 
   ChannelMix mixOf(Channel channel) => mix[channel] ?? ChannelMix.unity;
 
-  /// How much a channel's style chroma is scaled before any channel mix.
+  /// How much a channel's chroma is scaled, whether the style's or the mix's.
   double scaleOf(Channel channel) => switch (channel) {
     Channel.neutral || Channel.neutralVariant => tint,
     Channel.error => 1,
