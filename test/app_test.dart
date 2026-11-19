@@ -1,0 +1,89 @@
+import 'package:tone_desk/main.dart';
+import 'package:tone_desk/model/recipe.dart';
+import 'package:tone_desk/state/studio_cubit.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart';
+
+void main() {
+  setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
+
+  Future<StudioCubit> boot(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 960);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final cubit = StudioCubit();
+    await tester.pumpWidget(ToneDeskApp(cubit: cubit));
+    await tester.pumpAndSettle();
+    return cubit;
+  }
+
+  testWidgets('the three steps are all there is at first', (tester) async {
+    await boot(tester);
+    expect(find.text('Pick a color'), findsOneWidget);
+    expect(find.text('How colorful?'), findsOneWidget);
+    expect(find.text('Adjust'), findsOneWidget);
+    expect(find.text('Mixer'), findsNothing);
+  });
+
+  testWidgets('the colorful strip runs from gray to wild', (tester) async {
+    final cubit = await boot(tester);
+    final strip = find.byTooltip('Gray · Monochrome');
+    await tester.tap(strip);
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.variant.mood, 'Gray');
+    expect(find.textContaining('Gray.', findRichText: true), findsOneWidget);
+    await tester.tap(find.byTooltip('Wild · Fruit salad'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.variant.mood, 'Wild');
+  });
+
+  testWidgets('more options opens the mixer, done folds it away', (tester) async {
+    final cubit = await boot(tester);
+    await tester.ensureVisible(find.text('More options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('More options'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.mixerOpen, isTrue);
+    expect(find.text('Mixer'), findsOneWidget);
+    expect(find.text('Reset'), findsNothing);
+
+    cubit.toggleMute(Channel.secondary);
+    await tester.pumpAndSettle();
+    expect(find.text('Reset'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Done'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.mixerOpen, isFalse);
+  });
+
+  testWidgets('space shuffles and undo brings the seed back', (tester) async {
+    final cubit = await boot(tester);
+    final before = cubit.state.recipe.seed;
+    cubit.shuffle();
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.seed, isNot(before));
+    cubit.undo();
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.seed, before);
+    expect(swatches, contains(before));
+  });
+
+  testWidgets('the parts preview chips toggle, inspecting or not', (tester) async {
+    final cubit = await boot(tester);
+    await tester.tap(find.byTooltip('Parts'));
+    await tester.pumpAndSettle();
+    final chip = find.byType(FilterChip).first;
+    bool selected() => tester.widget<FilterChip>(chip).selected;
+    for (final inspecting in [false, true]) {
+      if (cubit.state.inspecting != inspecting) cubit.toggleInspecting();
+      await tester.pumpAndSettle();
+      final before = selected();
+      await tester.tap(find.descendant(of: chip, matching: find.text('Filter')));
+      await tester.pumpAndSettle();
+      expect(selected(), !before);
+    }
+  });
+}
