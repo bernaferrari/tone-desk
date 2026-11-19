@@ -3,8 +3,9 @@
 
     <application
             android:name="${applicationName}"
-            android:label="Color Studio"
-            android:icon="@mipmap/ic_launcher">
+            android:label="Tone Desk"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round">
         <activity
                 android:name=".MainActivity"
                 android:exported="true"

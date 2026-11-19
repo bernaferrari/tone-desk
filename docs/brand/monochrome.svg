@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <defs><mask id="gaps"><rect width="108" height="108" fill="#fff"/><g fill="#000"><rect x="25" y="55" width="16" height="10" rx="5"/><rect x="39" y="33" width="16" height="10" rx="5"/><rect x="53" y="47" width="16" height="10" rx="5"/><rect x="67" y="38" width="16" height="10" rx="5"/></g></mask></defs>
+  <g fill="#fff" mask="url(#gaps)"><g fill-opacity="0.4"><rect x="29.5" y="31" width="7" height="46" rx="3.5"/><rect x="43.5" y="31" width="7" height="46" rx="3.5"/><rect x="57.5" y="31" width="7" height="46" rx="3.5"/><rect x="71.5" y="31" width="7" height="46" rx="3.5"/></g><rect x="29.5" y="60" width="7" height="17" rx="3.5"/><rect x="43.5" y="38" width="7" height="39" rx="3.5"/><rect x="57.5" y="52" width="7" height="25" rx="3.5"/><rect x="71.5" y="43" width="7" height="34" rx="3.5"/></g>
+  <g fill="#fff"><rect x="26.5" y="56.5" width="13" height="7" rx="3.5"/><rect x="40.5" y="34.5" width="13" height="7" rx="3.5"/><rect x="54.5" y="48.5" width="13" height="7" rx="3.5"/><rect x="68.5" y="39.5" width="13" height="7" rx="3.5"/></g>
+</svg>

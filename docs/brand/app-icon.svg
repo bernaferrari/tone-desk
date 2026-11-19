@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72"><defs><clipPath id="icon-shape"><rect x="18" y="18" width="72" height="72" rx="16"/></clipPath></defs><g clip-path="url(#icon-shape)">
+  <rect width="108" height="108" fill="#FFF4E2"/>
+
+  <rect x="29.5" y="31" width="7" height="46" rx="3.5" fill="#4C463C" fill-opacity="0.14"/>
+  <rect x="29.5" y="60" width="7" height="17" rx="3.5" fill="#E2574C"/>
+  <rect x="43.5" y="31" width="7" height="46" rx="3.5" fill="#4C463C" fill-opacity="0.14"/>
+  <rect x="43.5" y="38" width="7" height="39" rx="3.5" fill="#F4B00C"/>
+  <rect x="57.5" y="31" width="7" height="46" rx="3.5" fill="#4C463C" fill-opacity="0.14"/>
+  <rect x="57.5" y="52" width="7" height="25" rx="3.5" fill="#3DB39E"/>
+  <rect x="71.5" y="31" width="7" height="46" rx="3.5" fill="#4C463C" fill-opacity="0.14"/>
+  <rect x="71.5" y="43" width="7" height="34" rx="3.5" fill="#3F7CF0"/>
+  <rect x="26.5" y="56.5" width="13" height="7" rx="3.5" fill="#fff" stroke="#201B13" stroke-width="1.5"/>
+  <rect x="40.5" y="34.5" width="13" height="7" rx="3.5" fill="#fff" stroke="#201B13" stroke-width="1.5"/>
+  <rect x="54.5" y="48.5" width="13" height="7" rx="3.5" fill="#fff" stroke="#201B13" stroke-width="1.5"/>
+  <rect x="68.5" y="39.5" width="13" height="7" rx="3.5" fill="#fff" stroke="#201B13" stroke-width="1.5"/>
+</g></svg>
