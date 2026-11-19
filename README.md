@@ -1,90 +1,74 @@
-![Image of Color Studio](assets/header.png)
+<p align="center">
+  <img src="docs/brand/app-icon.svg" width="80" height="80" alt="Tone Desk app icon">
+</p>
 
-# Color Studio
+<h1 align="center">Tone Desk</h1>
 
-It is hard to choose colors. Most color pickers give you 16 million colors and ask you to pick one. So many options, in
-fact, that your creativity may get blocked. There is no intuitive way to know which colors will fit your needs. This
-gets even harder when you deal with multiple colors. Even harder when you want these colors to follow a design
-specification and form a coherent theme. This project aims to help solve these problems.
+<p align="center"><strong>Make a Material 3 theme in three steps.</strong></p>
 
-<a href="https://bernaferrari.github.io/color-studio"><img src="assets/try_web.png" height="70"/></a> <a href="https://github.com/bernaferrari/color-studio/releases"><img src="assets/try_macOS.png" height="70"/></a>
+<p align="center">Pick a color, choose how colorful it gets, and turn three knobs. Every screen in the preview wears your theme while you do it.</p>
 
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=com.bernaferrari.colorstudio)
+<p align="center"><a href="https://bernaferrari.github.io/tone-desk/"><strong>Open Tone Desk ↗</strong></a></p>
 
-| Main | Single Selector |
-|:-:|:-:|
-| ![First](assets/web_0.png?raw=true) | ![Sec](assets/web_1.png?raw=true) |
+<p align="center">
+  <img src="docs/screenshots/how-colorful.webp" width="100%" alt="The same gold seed through all nine Material styles, from Gray to Wild, with the preview phones changing color in light and dark">
+</p>
 
-### History
+## Three steps, no manual
 
-First and foremost, but not exclusively, this app follows Material Design, with a special emphasis in dark mode. While
-dark mode is trending nowadays, the idea came when
-writing [Change Detection](https://github.com/bernaferrari/ChangeDetection). Back then it was hard to make a coherent
-dark theme. In [May 2019](https://github.com/material-components/material-components-android/releases/tag/1.1.0-alpha06)
-, Material Design Components for Android started receiving dark mode support. Material Dark Theme,
-however, [has a twist](https://material.io/design/color/dark-theme.html#properties): it applies a white overlay as a
-surface gets higher (more elevated). Back then, as far as I remember, this was mandatory (now it is optional) and
-instantly broke half my app. I started using more and more `elevation = 0`, but then it made the light theme worse.
-Choosing colors, which was already hard, became trial and error. I relied a lot
-on [Color Hexa](https://www.colorhexa.com/), but as my projects got more complex, it got insufficient and became a pain.
-Suddenly, I was already developing my own tool.
+1. **Pick a color.** Tap one of twelve presets, type a hex, or pull a color from a photo.
+2. **How colorful?** One strip runs from calm to colorful through Material's nine dynamic color styles. Each comes with a plain name, like *Balanced* (Android's default) or *Wild*, instead of a spec term.
+3. **Adjust.** Turn **Vivid** for more or less color, **Surface tint** for how much of it reaches the backgrounds, and **Contrast** from soft to high.
 
-### Overview
+The preview is real Material 3 widgets on five screens: a music recap, a profile, a trip planner, a chat and a sheet of components. Turn on the inspector (**I**) and hover anything to see which color role paints it.
 
-#### Color Scheme
+## The mixer, for brand colors
 
-This app allows you to play with 3 colors: Primary, Background and Surface. Background and Surface allows you to
-toggle "auto" mode. In auto mode, Background follows
-the [Material Design recommendation](https://material.io/design/color/dark-theme.html#properties): 8% of Primary color +
-#121212. Regarding Surface color, there is no official recommendation. Initially, the app made it the same as the
-Background color, but this didn't feel good. Inspired
-by [Moleskine Timepage](https://apps.apple.com/us/app/timepage/id989178902), Surface now gets the Background and adds 5%
-of lightness in [HSLuv](http://www.hsluv.org/) color space. If Background has 10% of lightness, Surface has 15%.
+<p align="center">
+  <img src="docs/screenshots/mixer.webp" width="100%" alt="The mixer in the dark studio: six palettes, each with a hue knob and a chroma slider, beside two pink phone previews">
+</p>
 
-Everything was written with extensibility in mind. The colors are not hard-coded, and it is straight-forward to add more
-or modify them in the future. In a previous app version, Secondary color was also present, but was removed to make the
-app simpler.
+Open **More options** when a brand needs exact colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own strip:
 
-<p align="center"><img src="assets/color_scheme.jpg?raw=true" alt="Color Scheme" height="350px"></p>
+- **Turn the knob** to shift its hue, and **slide** for more or less color.
+- **Tap the knob** to set an exact color with hue, chroma and tone reels or a hex.
+- **Tap the eye** to turn a palette gray and see what it paints.
 
-#### Contrast
+A palette drives a family of roles: primary also sets `onPrimary`, `primaryContainer`, `inversePrimary` and the fixed colors. Hover a strip's name to see them all.
 
-Web Content Accessibility Guidelines (WCAG) recommends a contrast of:
+## Take it with you
 
-- **3.0:1** minimum for texts larger than 18pt or icons (AA+).
-- **4.5:1** minimum for texts smaller than 18pt (AA).
-- **7.0:1** minimum when possible, if possible (AAA).
+**Export** (**E**) writes the theme for Flutter (`ThemeData` for light and dark), CSS custom properties with `light-dark()` in OKLCH, Tailwind v4, or W3C design tokens. When nothing is mixed, the Flutter export is the one-line `ColorScheme.fromSeed` call that rebuilds it.
 
-If you want to know more about contrast, read [this](https://usecontrast.com/guide)
-, [this](https://www.w3.org/TR/WCAG21/#contrast-minimum)
-or [this](https://www.carbondesignsystem.com/guidelines/accessibility/color/).
+Press **Space** to roll a new seed (your style and knobs stay), **D** to flip the studio between light and dark, **C** to see every color role, and **⌘Z** to undo.
 
-#### Color Blindness
+## Run from source
 
-> Don’t rely on color alone to convey meaning. This includes conveying information, indicating an action, prompting the user for a response, or distinguishing one visual element from another.
->
-> Source: [Carbon Design System](https://www.carbondesignsystem.com/guidelines/accessibility/color/)
+Tone Desk uses Dart's primary constructors, so it needs Flutter's `main` channel (the CI pins the exact revision in [`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
 
-> Because colorblindness takes different forms (including red-green, blue-yellow, and monochromatic), multiple visual cues help communicate important states. Elements such as strokes, indicators, patterns, texture, or text can describe actions and content.
->
-> Source: [Material Design System](https://material.io/design/usability/accessibility.html#color-contrast)
+```sh
+git clone https://github.com/bernaferrari/tone-desk.git
+cd tone-desk
+flutter channel main && flutter upgrade
+flutter pub get
+flutter run -d chrome
+```
 
-This project allows you to select between 8 different Color Blindness scenarios using the formulas from a Swift library
-named [Colorblinds](https://github.com/jdekock/Colorblinds). It automatically updates the contrast ratio between colors,
-so that you can see simulate a color blind scenario.
+It also runs on macOS, Android and iOS. Check changes with `flutter analyze` and `flutter test`; every push to `main` deploys the web app to GitHub Pages. The icons are drawn once in [`docs/brand`](docs/brand) and generated for every platform with `npx screenshot-studio icons docs/brand/icon.json`.
 
-## Reporting Issues
+## History
 
-It is not easy to develop alone. I am a developer, not a designer. If you have any design suggestions, feature requests
-or would like to integrate your own color specs, issues and pull requests are welcome. You can
-report [here](https://github.com/bernaferrari/color-studio/issues).
+<p align="center">
+  <img src="docs/screenshots/color-studio-2020.webp" width="80%" alt="Color Studio in 2020: color scheme rows, contrast ratio rings, color blindness swatches and a preview with “Here's your 2020, wrapped.”">
+  <br><sub>Color Studio in 2020. The wrapped card is still there.</sub>
+</p>
 
-## License
+Tone Desk started in 2019 as Color Studio. Material Design Components for Android had just shipped [dark theme support](https://github.com/material-components/material-components-android/releases/tag/1.1.0-alpha06), with a twist: surfaces got a white overlay as they rose, which broke half of [ChangeDetection](https://github.com/bernaferrari/ChangeDetection) overnight. Picking colors that worked in light and dark became trial and error, so I built a tool that wore the theme while you made it.
 
-    Copyright 2021 Bernardo Ferrari
+Material has since moved to dynamic color, where one seed grows a whole scheme. Tone Desk is the rewrite for that world: fewer panels, plainer words, and the same idea of seeing your colors on real screens. The faders in its icon are Color Studio's, now in color.
 
-    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+## Feedback
 
-    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+Design suggestions, bug reports and pull requests are welcome in [issues](https://github.com/bernaferrari/tone-desk/issues). Tone Desk keeps everything on your device; see the [privacy policy](privacy_policy.md).
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+[Apache License 2.0](LICENSE)
