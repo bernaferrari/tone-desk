@@ -353,15 +353,15 @@ class const _StyleBand({
   @override
   Widget build(BuildContext context) {
     const duration = Duration(milliseconds: 220);
-    const morph = Duration(milliseconds: 420);
+    const spring = SpringCurve.fastSpatial;
     final primary = Color(palettes[Channel.primary]!.get(60));
     final round = Radius.circular(math.min(width / 2, 18));
     const tight = Radius.circular(6);
     return Tooltip(
       message: tooltip,
       child: AnimatedContainer(
-        duration: morph,
-        curve: Curves.easeOutBack,
+        duration: spring.duration,
+        curve: spring,
         width: width,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
@@ -380,8 +380,8 @@ class const _StyleBand({
                 color: primary,
                 alignment: Alignment.center,
                 child: AnimatedScale(
-                  duration: morph,
-                  curve: Curves.easeOutBack,
+                  duration: spring.duration,
+                  curve: spring,
                   scale: selected ? 1 : 0.4,
                   child: AnimatedOpacity(
                     duration: duration,
@@ -466,7 +466,6 @@ class const _Knobs() extends StatelessWidget {
   }
 }
 
-/// Exact brand colors and the full mixer, folded away until asked for.
 /// The mixer, folded away under a single row until someone asks for it.
 class const _MoreOptions({required final bool compact}) extends StatelessWidget {
   @override
@@ -486,60 +485,82 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
           onTap: open ? null : () => cubit.setMixerOpen(true),
           builder: (context, hovered, _) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Text(
-                    open ? 'Mixer' : 'More options',
-                    key: ValueKey(open),
-                    style: open
-                        ? displayStyle(19, weight: FontWeight.w600)
-                        : TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                            color: hovered ? colors.onSurface : colors.onSurfaceVariant,
+            child: SizedBox(
+              height: 32,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _AxisSwap(
+                      open: open,
+                      alignment: Alignment.centerLeft,
+                      closed: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'More options',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: hovered ? colors.onSurface : colors.onSurfaceVariant,
+                              ),
+                            ),
                           ),
+                          if (mixed) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
+                            ),
+                          ],
+                        ],
+                      ),
+                      opened: Text('Mixer', style: displayStyle(19, weight: FontWeight.w600)),
+                    ),
                   ),
-                ),
-                if (mixed && !open) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
+                  _AxisSwap(
+                    open: open,
+                    alignment: Alignment.centerRight,
+                    closed: Icon(
+                      Icons.expand_more_rounded,
+                      size: 20,
+                      color: hovered ? colors.onSurface : colors.onSurfaceVariant,
+                    ),
+                    opened: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(animation), child: child),
+                          ),
+                          child: mixed
+                              ? Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: PillButton(
+                                    label: 'Reset',
+                                    dense: true,
+                                    icon: Icons.restart_alt_rounded,
+                                    tooltip: 'Put every palette back the way the style made it',
+                                    onTap: cubit.resetMix,
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                        PillButton(
+                          label: 'Done',
+                          dense: true,
+                          icon: Icons.check_rounded,
+                          onTap: () => cubit.setMixerOpen(false),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-                const Spacer(),
-                if (open) ...[
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(animation), child: child),
-                    ),
-                    child: mixed
-                        ? Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: PillButton(
-                              label: 'Reset',
-                              dense: true,
-                              icon: Icons.restart_alt_rounded,
-                              tooltip: 'Put every palette back the way the style made it',
-                              onTap: cubit.resetMix,
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  PillButton(
-                    label: 'Done',
-                    dense: true,
-                    icon: Icons.check_rounded,
-                    onTap: () => cubit.setMixerOpen(false),
-                  ),
-                ] else
-                  Icon(Icons.expand_more_rounded, size: 20, color: colors.onSurfaceVariant),
-              ],
+              ),
             ),
           ),
         ),
@@ -555,6 +576,45 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A shared-axis swap between the folded and open headers: the open one lives
+/// below, so opening lifts the old header out the top while the new one rises
+/// in. The old one is gone before the new one shows, so the two never blend.
+class const _AxisSwap({
+  required final bool open,
+  required final Widget closed,
+  required final Widget opened,
+  required final AlignmentGeometry alignment,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.linear,
+      switchOutCurve: Curves.linear,
+      layoutBuilder: (current, previous) =>
+          Stack(alignment: alignment, clipBehavior: Clip.none, children: [...previous, ?current]),
+      transitionBuilder: (child, animation) {
+        final isOpened = child.key == const ValueKey(true);
+        final incoming = child.key == ValueKey(open);
+        return FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: incoming ? const Interval(0.35, 1, curve: Curves.easeOut) : const Interval(0.65, 1),
+          ),
+          child: SlideTransition(
+            position: Tween(
+              begin: Offset(0, isOpened ? 0.45 : -0.45),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic)),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(key: ValueKey(open), child: open ? opened : closed),
     );
   }
 }

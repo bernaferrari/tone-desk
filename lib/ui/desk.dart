@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,7 +10,8 @@ import '../state/studio_cubit.dart';
 import 'chrome.dart';
 import 'controls.dart';
 
-/// The six tonal palettes, one row each, with a hue knob and a color slider.
+/// The six tonal palettes as channels on a desk, each with a hue knob on top
+/// and a color fader below.
 class const Mixer({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -16,14 +19,40 @@ class const Mixer({super.key}) extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Turn a knob to shift the hue, slide for more or less color. Tap a color to set it exactly.',
+          'Turn a knob to shift the hue, slide a fader for more or less color. Tap a knob to set an exact color.',
           style: TextStyle(fontSize: 12.5, height: 1.4, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
-        const SizedBox(height: 12),
-        for (final (i, c) in Channel.values.indexed) ...[
-          if (i > 0) const SizedBox(height: 6),
-          ChannelStrip(channel: c),
-        ],
+        const SizedBox(height: 14),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const gap = 5.0;
+            final strip = (constraints.maxWidth - gap * (Channel.values.length - 1)) / Channel.values.length;
+            // One size for every name, small enough for the longest to fit.
+            final base = DefaultTextStyle.of(context).style.merge(ChannelStrip.labelStyle(11.5));
+            var widest = 0.0;
+            for (final c in Channel.values) {
+              final painter = TextPainter(
+                text: TextSpan(text: c.label, style: base),
+                textDirection: TextDirection.ltr,
+                textScaler: MediaQuery.textScalerOf(context),
+                maxLines: 1,
+              )..layout();
+              widest = math.max(widest, painter.width);
+              painter.dispose();
+            }
+            final labelSize = 11.5 * math.min(1.0, (strip - 8) / widest);
+            return Row(
+              spacing: gap,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final c in Channel.values)
+                  Expanded(
+                    child: ChannelStrip(channel: c, labelSize: labelSize),
+                  ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -38,9 +67,13 @@ String _rolesOf(Channel channel) => switch (channel) {
   Channel.error => 'error, onError, errorContainer, onErrorContainer',
 };
 
-/// One tonal palette: a hue knob holding its color, a chroma slider, and a
-/// switch that turns it gray. The row is tinted with the palette itself.
-class const ChannelStrip({super.key, required final Channel channel}) extends StatelessWidget {
+/// One tonal palette as a channel strip: a hue knob wearing its color, a
+/// fader for how much color, and a switch that turns it gray. The strip is
+/// tinted with the palette itself.
+class const ChannelStrip({super.key, required final Channel channel, final double labelSize = 11.5})
+    extends StatelessWidget {
+  static TextStyle labelStyle(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w600);
+
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
@@ -55,9 +88,9 @@ class const ChannelStrip({super.key, required final Channel channel}) extends St
 
     final hue = mix.hue ?? style.hue;
     final chroma = mix.muted ? 0.0 : (mix.chroma ?? style.chroma).clamp(0.0, channel.maxChroma);
-    final ringChroma = channel.maxChroma > 50 ? 60.0 : 24.0;
-    final ring = [for (var h = 0; h < 360; h += 30) Color(Hct.from(h.toDouble(), ringChroma, tone).toInt())];
-    final tint = Color(palette.get(state.isDark ? 17 : 95));
+    final ringChroma = channel.maxChroma > 50 ? 48.0 : 24.0;
+    final ring = [for (var h = 0; h < 360; h += 15) Color(Hct.from(h.toDouble(), ringChroma, tone).toInt())];
+    final tint = Color(Hct.from(palette.hue, math.min(palette.chroma, 16), state.isDark ? 16 : 94).toInt());
     // The most color this hue can show at the track's tone; past it every
     // band would look the same.
     final reach = Hct.from(hue, 200, tone).chroma.clamp(12.0, channel.maxChroma);
@@ -77,18 +110,20 @@ class const ChannelStrip({super.key, required final Channel channel}) extends St
       tick: state.spotlightTick,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
-        decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(18)),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(3, 10, 3, 6),
+        decoration: BoxDecoration(color: tint, borderRadius: BorderRadius.circular(16)),
+        child: Column(
           children: [
             Tooltip(
               message: 'Turn for hue · tap to set an exact color',
               child: HueKnob(
-                size: 54,
+                size: 42,
+                label: '${channel.label} hue',
                 hue: hue,
                 unity: style.hue,
                 ring: ring,
                 center: key,
+                rim: tint,
                 onTap: pick,
                 onStart: cubit.beginScrub,
                 onEnd: cubit.endScrub,
@@ -96,66 +131,45 @@ class const ChannelStrip({super.key, required final Channel channel}) extends St
                 onChanged: (h) => cubit.setChannelHue(channel, h, live: true),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Tooltip(
-                                message: 'Changes ${_rolesOf(channel)}',
-                                child: Text(
-                                  channel.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: colors.onSurface,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _Readout(text: '${hue.round()}°', changed: mix.hue != null),
-                            Text(' · ', style: monoStyle(11, color: colors.onSurfaceVariant)),
-                            _Readout(text: '${chroma.round()}', changed: mix.chroma != null || mix.muted),
-                          ],
-                        ),
-                      ),
-                      StudioIconButton(
-                        icon: mix.muted ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        tooltip: mix.muted ? 'Bring the color back' : 'Make ${channel.label.toLowerCase()} gray',
-                        selected: mix.muted,
-                        size: 26,
-                        onTap: () => cubit.toggleMute(channel),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 220),
-                    opacity: mix.muted ? 0.45 : 1,
-                    child: BandSlider(
-                      height: 22,
-                      value: (chroma / reach).clamp(0.0, 1.0),
-                      unity: (style.chroma / reach).clamp(0.0, 1.0),
-                      colorAt: (t) => Color(Hct.from(hue, t * reach, tone).toInt()),
-                      semanticLabel: '${channel.label} chroma',
-                      semanticValue: chroma.round().toString(),
-                      onStart: cubit.beginScrub,
-                      onEnd: cubit.endScrub,
-                      onReset: () => cubit.setChannelChroma(channel, null),
-                      onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 5),
+            _Readout(text: '${hue.round()}°', changed: mix.hue != null),
+            const SizedBox(height: 8),
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 220),
+              opacity: mix.muted ? 0.45 : 1,
+              child: Fader(
+                value: (chroma / reach).clamp(0.0, 1.0),
+                unity: (style.chroma / reach).clamp(0.0, 1.0),
+                colorAt: (t) => Color(Hct.from(hue, t * reach, tone).toInt()),
+                rim: tint,
+                semanticLabel: '${channel.label} chroma',
+                semanticValue: chroma.round().toString(),
+                onStart: cubit.beginScrub,
+                onEnd: cubit.endScrub,
+                onReset: () => cubit.setChannelChroma(channel, null),
+                onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
               ),
+            ),
+            const SizedBox(height: 6),
+            _Readout(text: '${chroma.round()}', changed: mix.chroma != null || mix.muted),
+            const SizedBox(height: 8),
+            Tooltip(
+              message: 'Changes ${_rolesOf(channel)}',
+              child: Text(
+                channel.label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                style: labelStyle(labelSize).copyWith(color: colors.onSurface),
+              ),
+            ),
+            const SizedBox(height: 4),
+            StudioIconButton(
+              icon: mix.muted ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              tooltip: mix.muted ? 'Bring the color back' : 'Make ${channel.label.toLowerCase()} gray',
+              selected: mix.muted,
+              size: 28,
+              onTap: () => cubit.toggleMute(channel),
             ),
           ],
         ),
@@ -192,7 +206,7 @@ class const _Spotlight({required final bool active, required final int tick, req
       curve: Curves.easeOut,
       builder: (context, t, child) => Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           color: colors.primary.withValues(alpha: 0.14 * t),
           border: Border.all(color: colors.primary.withValues(alpha: t), width: 2),
         ),
