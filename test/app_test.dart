@@ -1,6 +1,7 @@
 import 'package:tone_desk/main.dart';
 import 'package:tone_desk/model/recipe.dart';
 import 'package:tone_desk/state/studio_cubit.dart';
+import 'package:tone_desk/ui/chrome.dart';
 import 'package:tone_desk/ui/controls.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,6 +27,24 @@ void main() {
     expect(find.text('How colorful?'), findsOneWidget);
     expect(find.text('Adjust'), findsOneWidget);
     expect(find.text('Mixer'), findsNothing);
+  });
+
+  testWidgets('About keeps the mark square and returns to the studio', (tester) async {
+    await boot(tester);
+    await tester.tap(find.byTooltip('About Tone Desk'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    final mark = find.descendant(of: dialog, matching: find.byType(FaderMark));
+    final title = find.descendant(of: dialog, matching: find.text('Tone Desk'));
+    expect(tester.getSize(mark), const Size.square(44));
+    expect(tester.getRect(mark).right, lessThan(tester.getRect(title).left));
+    expect(find.text('Keyboard shortcuts'), findsOneWidget);
+    expect(find.text('Source on GitHub'), findsOneWidget);
+
+    await tester.tap(find.text('Back to studio'));
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
   });
 
   testWidgets('round buttons keep their size while held', (tester) async {
