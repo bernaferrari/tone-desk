@@ -167,7 +167,7 @@ class const StudioIconButton({
     return Pressable(
       tooltip: tooltip,
       onTap: onTap,
-      pressedScale: 0.9,
+      pressedScale: 1,
       builder: (context, hovered, pressed) {
         final fill = selected
             ? (this.ink == null ? colors.primary : ink)

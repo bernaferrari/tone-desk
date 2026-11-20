@@ -117,23 +117,19 @@ class _HueKnobState() extends State<HueKnob> {
             setState(() => _active = false);
             widget.onEnd?.call();
           },
-          child: AnimatedScale(
-            scale: _active ? 1.06 : 1,
-            duration: const Duration(milliseconds: 160),
-            child: Glide(
-              value: widget.hue,
-              instant: _active,
-              builder: (hue) => CustomPaint(
-                size: Size.square(widget.size),
-                painter: _KnobPainter(
-                  hue: hue,
-                  unity: widget.unity,
-                  ring: widget.ring,
-                  body: widget.center ?? colors.surfaceContainerLowest,
-                  ink: widget.center?.ink ?? colors.onSurface,
-                  rim: widget.rim ?? colors.surfaceContainerLowest,
-                  lifted: _hovered || _active,
-                ),
+          child: Glide(
+            value: widget.hue,
+            instant: _active,
+            builder: (hue) => CustomPaint(
+              size: Size.square(widget.size),
+              painter: _KnobPainter(
+                hue: hue,
+                unity: widget.unity,
+                ring: widget.ring,
+                body: widget.center ?? colors.surfaceContainerLowest,
+                ink: widget.center?.ink ?? colors.onSurface,
+                rim: widget.rim ?? colors.surfaceContainerLowest,
+                lifted: _hovered || _active,
               ),
             ),
           ),
@@ -546,13 +542,9 @@ class _TickKnobState() extends State<TickKnob> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedScale(
-            scale: _active ? 1.04 : 1,
-            duration: const Duration(milliseconds: 160),
-            child: SizedBox.square(
-              dimension: widget.size,
-              child: Stack(alignment: Alignment.center, children: [ring, cap]),
-            ),
+          SizedBox.square(
+            dimension: widget.size,
+            child: Stack(alignment: Alignment.center, children: [ring, cap]),
           ),
           const SizedBox(height: 8),
           Text(

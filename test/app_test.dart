@@ -28,6 +28,47 @@ void main() {
     expect(find.text('Mixer'), findsNothing);
   });
 
+  testWidgets('round buttons keep their size while held', (tester) async {
+    await boot(tester);
+    for (final tooltip in ['Surprise me (Space)', 'Use a photo']) {
+      final button = find.byTooltip(tooltip);
+      final face = find.descendant(of: button, matching: find.byType(AnimatedContainer)).first;
+      final bounds = tester.getRect(face);
+      final press = await tester.startGesture(bounds.center);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.getRect(face), bounds);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.getRect(face), bounds);
+      await press.cancel();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('rotary knobs keep their size while dragged', (tester) async {
+    final cubit = await boot(tester);
+    cubit.setMixerOpen(true);
+    await tester.pumpAndSettle();
+
+    for (final type in [TickKnob, HueKnob]) {
+      final knob = find.byType(type).first;
+      await tester.ensureVisible(knob);
+      await tester.pumpAndSettle();
+      final face = find.descendant(of: knob, matching: find.byType(CustomPaint));
+      final bounds = tester.getRect(face);
+      final drag = await tester.startGesture(bounds.center);
+      final recipe = cubit.state.recipe;
+      await drag.moveBy(const Offset(-40, 0));
+      await drag.moveBy(const Offset(-12, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.getRect(face), bounds);
+      expect(cubit.state.recipe, isNot(recipe));
+      await drag.up();
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('the colorful strip runs from gray to wild', (tester) async {
     final cubit = await boot(tester);
     final strip = find.byTooltip('Gray · Monochrome');
