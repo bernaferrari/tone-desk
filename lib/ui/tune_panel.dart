@@ -175,7 +175,7 @@ class const _Dot({
     return Pressable(
       tooltip: color.hex,
       onTap: onTap,
-      pressedScale: 0.9,
+      pressedScale: 1,
       builder: (context, hovered, _) => _Ring(
         size: size,
         selected: selected,
@@ -205,7 +205,7 @@ class const _ActionDot({
     return Pressable(
       tooltip: tooltip,
       onTap: onTap,
-      pressedScale: 0.9,
+      pressedScale: 1,
       builder: (context, hovered, _) => _Ring(
         size: size,
         selected: fill != null,
