@@ -199,8 +199,13 @@ class const ChannelStrip({
         onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
       ),
     );
-    final hueReadout = _Readout(text: '${hue.round()}°', changed: mix.hue != null);
-    final chromaReadout = _Readout(text: '${chroma.round()}', changed: mix.chroma != null || mix.muted);
+    final hueReadout = _Readout(label: 'Hue', value: '${hue.round()}°', changed: mix.hue != null, inline: rows);
+    final chromaReadout = _Readout(
+      label: 'Chroma',
+      value: '${chroma.round()}',
+      changed: mix.chroma != null || mix.muted,
+      inline: rows,
+    );
     final label = Tooltip(
       message: 'Changes ${_rolesOf(channel)}',
       child: Text(
@@ -239,20 +244,16 @@ class const ChannelStrip({
                         // In line with where the fader's track starts.
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Flexible(child: label),
-                                    const SizedBox(width: 8),
-                                    hueReadout,
-                                    Text(' · ', style: monoStyle(11, color: colors.onSurfaceVariant)),
-                                    chromaReadout,
-                                  ],
-                                ),
+                              Row(
+                                children: [
+                                  Expanded(child: label),
+                                  mute,
+                                ],
                               ),
-                              mute,
+                              Wrap(spacing: 10, runSpacing: 4, children: [hueReadout, chromaReadout]),
                             ],
                           ),
                         ),
@@ -282,17 +283,30 @@ class const ChannelStrip({
   }
 }
 
-class const _Readout({required final String text, required final bool changed}) extends StatelessWidget {
+class const _Readout({
+  required final String label,
+  required final String value,
+  required final bool changed,
+  required final bool inline,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Text(
-      text,
-      style: monoStyle(
-        11,
-        color: changed ? colors.primary : colors.onSurfaceVariant,
-        weight: changed ? FontWeight.w700 : FontWeight.w500,
-      ),
+    final valueStyle = monoStyle(
+      11,
+      color: changed ? colors.primary : colors.onSurfaceVariant,
+      weight: changed ? FontWeight.w700 : FontWeight.w500,
+    );
+    if (inline) return Text('$label $value', style: valueStyle);
+
+    return Column(
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
+        ),
+        Text(value, style: valueStyle),
+      ],
     );
   }
 }
