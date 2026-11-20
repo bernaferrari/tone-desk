@@ -22,30 +22,26 @@ class const _AboutDialog() extends StatelessWidget {
     final colors = theme.colorScheme;
     final muted = theme.textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant, height: 1.5);
 
-    return Dialog(
+    return AlertDialog(
       insetPadding: const EdgeInsets.all(16),
       backgroundColor: colors.surfaceContainerLow,
       constraints: const BoxConstraints(maxWidth: 460),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+      scrollable: true,
+      title: Row(
+        spacing: 14,
+        children: [
+          const FaderMark(size: 44),
+          Flexible(
+            child: Text('Tone Desk', style: displayStyle(30, color: colors.onSurface, height: 1.1)),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 412,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const FaderMark(size: 44),
-                const SizedBox(width: 14),
-                Flexible(
-                  child: Semantics(
-                    header: true,
-                    namesRoute: true,
-                    child: Text('Tone Desk', style: displayStyle(30, color: colors.onSurface, height: 1.1)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             Text(
               'Pick a color, tune your Material 3 palette, and see it on real screens as you work. '
               'Use the mixer to set exact brand colors.',
@@ -81,30 +77,23 @@ class const _AboutDialog() extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 20),
-            Divider(height: 1, color: colors.outlineVariant),
-            const SizedBox(height: 12),
-            OverflowBar(
-              alignment: MainAxisAlignment.spaceBetween,
-              overflowAlignment: OverflowBarAlignment.end,
-              spacing: 8,
-              children: [
-                TextButton.icon(
-                  onPressed: () => launchUrl(Uri.parse('https://github.com/bernaferrari/tone-desk')),
-                  style: TextButton.styleFrom(
-                    foregroundColor: colors.onSurfaceVariant,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                  iconAlignment: IconAlignment.end,
-                  label: const Text('Source on GitHub'),
-                ),
-                FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Back to studio')),
-              ],
-            ),
           ],
         ),
       ),
+      actions: [
+        TextButton.icon(
+          onPressed: () => launchUrl(Uri.parse('https://github.com/bernaferrari/tone-desk')),
+          icon: Image.asset(
+            'assets/github-mark.png',
+            width: 16,
+            height: 16,
+            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black,
+            excludeFromSemantics: true,
+          ),
+          label: const Text('Source'),
+        ),
+        FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+      ],
     );
   }
 }
