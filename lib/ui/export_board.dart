@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -42,11 +44,31 @@ class _ExportBoardState() extends State<ExportBoard> {
           runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Segmented<ExportFormat>(
-              value: format,
-              values: ExportFormat.values,
-              label: (f) => f.label,
-              onChanged: cubit.setExportFormat,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < MediaQuery.textScalerOf(context).scale(380)) {
+                  return DropdownMenu<ExportFormat>(
+                    width: constraints.maxWidth,
+                    label: const Text('Format'),
+                    initialSelection: format,
+                    selectOnly: true,
+                    onSelected: (value) {
+                      if (value != null) cubit.setExportFormat(value);
+                    },
+                    dropdownMenuEntries: [
+                      for (final value in ExportFormat.values) DropdownMenuEntry(value: value, label: value.label),
+                    ],
+                  );
+                }
+                return SegmentedButton<ExportFormat>(
+                  showSelectedIcon: false,
+                  selected: {format},
+                  segments: [
+                    for (final value in ExportFormat.values) ButtonSegment(value: value, label: Text(value.label)),
+                  ],
+                  onSelectionChanged: (selection) => cubit.setExportFormat(selection.single),
+                );
+              },
             ),
             if (format == ExportFormat.flutter && unmixed)
               PillButton(
@@ -66,23 +88,7 @@ class _ExportBoardState() extends State<ExportBoard> {
         const SizedBox(height: 12),
         Text(_hint(format, unmixed, _full), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13.5)),
         const SizedBox(height: 16),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: SelectionArea(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                itemCount: lines.length,
-                itemBuilder: (context, i) => _CodeLine(number: i + 1, text: lines[i]),
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: _CodePreview(lines: lines)),
       ],
     );
   }
@@ -97,7 +103,60 @@ final _token = RegExp(
   r'|(\b\d+(?:\.\d+)?\b)', // number
 );
 
+class const _CodePreview({required final List<String> lines}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final character = TextPainter(
+      text: TextSpan(
+        text: '0',
+        style: monoStyle(12.5, weight: FontWeight.w400),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    var longest = 0.0;
+    for (final line in lines) {
+      final swatches = _token.allMatches(line).where((token) => token[2] != null).length;
+      longest = math.max(longest, line.length * character.width + swatches * _CodeLine.swatchWidth);
+    }
+    character.dispose();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SelectionArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: math.max(constraints.maxWidth, (longest + _CodeLine.marginWidth).ceilToDouble()),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                itemCount: lines.length,
+                itemBuilder: (context, i) => _CodeLine(number: i + 1, text: lines[i]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class const _CodeLine({required final int number, required final String text}) extends StatelessWidget {
+  static const _linePadding = 12.0;
+  static const _gutter = 28.0;
+  static const _gap = 12.0;
+  static const _swatchSize = 12.0;
+  static const _swatchGap = 5.0;
+  static const marginWidth = 2 * _linePadding + _gutter + _gap;
+  static const swatchWidth = _swatchSize + _swatchGap;
+
   static Color? _colorOf(String literal) {
     if (literal.startsWith('Color(0xFF')) return parseColor(literal.substring(10, 16));
     return parseColor(literal.replaceAll('"', ''));
@@ -126,9 +185,9 @@ class const _CodeLine({required final int number, required final String text}) e
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
               child: Container(
-                width: 12,
-                height: 12,
-                margin: const EdgeInsets.only(right: 5),
+                width: _swatchSize,
+                height: _swatchSize,
+                margin: const EdgeInsets.only(right: _swatchGap),
                 decoration: BoxDecoration(
                   color: color,
                   borderRadius: BorderRadius.circular(3),
@@ -171,12 +230,12 @@ class const _CodeLine({required final int number, required final String text}) e
     if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: _linePadding, vertical: 1),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 40,
+            width: _gutter,
             child: SelectionContainer.disabled(
               child: Text(
                 '$number',
@@ -185,9 +244,13 @@ class const _CodeLine({required final int number, required final String text}) e
               ),
             ),
           ),
-          const SizedBox(width: 18),
+          const SizedBox(width: _gap),
           Expanded(
-            child: Text.rich(TextSpan(style: base, children: spans)),
+            child: Text.rich(
+              TextSpan(style: base, children: spans),
+              softWrap: false,
+              overflow: TextOverflow.visible,
+            ),
           ),
         ],
       ),

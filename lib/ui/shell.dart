@@ -13,13 +13,14 @@ import 'tune_panel.dart';
 const _wide = 1280.0;
 const _medium = 960.0;
 
+class const _ShuffleSeedIntent() extends Intent {}
+
 class const StudioShell() extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.space): cubit.shuffle,
         const SingleActivator(LogicalKeyboardKey.space, shift: true): cubit.shuffleStyle,
         const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): cubit.undo,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): cubit.undo,
@@ -30,17 +31,27 @@ class const StudioShell() extends StatelessWidget {
         const SingleActivator(LogicalKeyboardKey.keyC): () => showColors(context),
         const SingleActivator(LogicalKeyboardKey.keyE): () => showExport(context),
       },
-      child: Focus(
-        autofocus: true,
-        child: Scaffold(
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final w = constraints.maxWidth;
-                if (w >= _wide && constraints.maxHeight >= 640) return const _WideLayout();
-                if (w >= _medium && constraints.maxHeight >= 600) return const _WideLayout(column: 344);
-                return const _NarrowLayout();
-              },
+      child: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): PrioritizedIntents(
+            orderedIntents: [ActivateIntent(), _ShuffleSeedIntent()],
+          ),
+        },
+        child: Actions(
+          actions: {_ShuffleSeedIntent: CallbackAction<_ShuffleSeedIntent>(onInvoke: (_) => cubit.shuffle())},
+          child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              body: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final w = constraints.maxWidth;
+                    if (w >= _wide && constraints.maxHeight >= 640) return const _WideLayout();
+                    if (w >= _medium && constraints.maxHeight >= 600) return const _WideLayout(column: 344);
+                    return const _NarrowLayout();
+                  },
+                ),
+              ),
             ),
           ),
         ),
@@ -125,25 +136,22 @@ void showColors(BuildContext context) => _showSheet(context, title: 'All colors'
 void showExport(BuildContext context) => _showSheet(context, title: 'Export', child: const ExportBoard());
 
 void _showSheet(BuildContext context, {required String title, required Widget child}) {
-  final size = MediaQuery.sizeOf(context);
   showDialog<void>(
     context: context,
-    builder: (context) => Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-      child: SizedBox(
-        width: (size.width - 48).clamp(320.0, 1080.0),
-        height: (size.height - 48).clamp(420.0, 880.0),
+    builder: (context) {
+      final compact = MediaQuery.sizeOf(context).width < 480;
+      return Dialog(
+        insetPadding: EdgeInsets.all(compact ? 12 : 24),
+        constraints: const BoxConstraints(maxWidth: 1080, maxHeight: 880),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 20, 20, 24),
+          padding: compact ? const EdgeInsets.all(16) : const EdgeInsets.fromLTRB(28, 20, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  Text(title, style: displayStyle(30)),
-                  const Spacer(),
+                  Expanded(child: Text(title, style: displayStyle(30))),
                   StudioIconButton(
                     icon: Icons.close_rounded,
                     tooltip: 'Close (Esc)',
@@ -152,14 +160,12 @@ void _showSheet(BuildContext context, {required String title, required Widget ch
                 ],
               ),
               const SizedBox(height: 14),
-              Expanded(
-                child: Padding(padding: const EdgeInsets.only(right: 8), child: child),
-              ),
+              Expanded(child: child),
             ],
           ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -168,58 +174,86 @@ class const _Header({final bool compact = false}) extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
     final state = context.watch<StudioCubit>().state;
+    final modifier = Theme.of(context).platform == TargetPlatform.macOS ? '⌘' : 'Ctrl+';
+    final themeLabel = state.isDark ? 'Light studio (D)' : 'Dark studio (D)';
+    final undo = state.canUndo ? cubit.undo : null;
+    final redo = state.canRedo ? cubit.redo : null;
+    final export = PillButton(
+      label: 'Export',
+      dense: true,
+      icon: Icons.code_rounded,
+      tooltip: 'Export theme (E)',
+      onTap: () => showExport(context),
+    );
+    final brand = Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 12,
+      children: [
+        const FaderMark(size: 34),
+        Flexible(
+          child: Text('Tone Desk', style: displayStyle(24), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+
+    if (compact) {
+      PopupMenuItem<VoidCallback> item(String label, VoidCallback? action) =>
+          PopupMenuItem(value: action, enabled: action != null, child: Text(label));
+
+      return Row(
+        children: [
+          Expanded(child: brand),
+          const SizedBox(width: 6),
+          export,
+          PopupMenuButton<VoidCallback>(
+            tooltip: 'Studio actions',
+            onSelected: (action) => action(),
+            itemBuilder: (_) => [
+              item('Surprise me', cubit.shuffle),
+              item('Undo', undo),
+              item('Redo', redo),
+              item('All colors', () => showColors(context)),
+              item(themeLabel, cubit.toggleBrightness),
+              item('About Tone Desk', () => showAbout(context)),
+            ],
+          ),
+        ],
+      );
+    }
+
     final views = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         StudioIconButton(icon: Icons.casino_outlined, tooltip: 'Surprise me (Space)', onTap: cubit.shuffle),
         const SizedBox(width: 6),
-        PillButton(
-          label: 'Export',
-          dense: true,
-          icon: Icons.code_rounded,
-          tooltip: 'Code for Flutter, CSS and Tailwind (E)',
-          onTap: () => showExport(context),
-        ),
+        export,
       ],
     );
     final actions = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        StudioIconButton(icon: Icons.undo_rounded, tooltip: 'Undo (⌘Z)', onTap: state.canUndo ? cubit.undo : null),
-        StudioIconButton(icon: Icons.redo_rounded, tooltip: 'Redo (⇧⌘Z)', onTap: state.canRedo ? cubit.redo : null),
+        StudioIconButton(icon: Icons.undo_rounded, tooltip: 'Undo (${modifier}Z)', onTap: undo),
+        StudioIconButton(icon: Icons.redo_rounded, tooltip: 'Redo (Shift+${modifier}Z)', onTap: redo),
         const SizedBox(width: 4),
         StudioIconButton(icon: Icons.palette_outlined, tooltip: 'All colors (C)', onTap: () => showColors(context)),
         StudioIconButton(
           icon: state.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-          tooltip: state.isDark ? 'Light studio (D)' : 'Dark studio (D)',
+          tooltip: themeLabel,
           onTap: cubit.toggleBrightness,
         ),
         StudioIconButton(icon: Icons.info_outline_rounded, tooltip: 'About Tone Desk', onTap: () => showAbout(context)),
       ],
     );
-    final brand = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const FaderMark(size: 34),
-        const SizedBox(width: 12),
-        Text('Tone Desk', style: displayStyle(24)),
-      ],
-    );
-
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [brand, const Spacer(), actions]),
-          const SizedBox(height: 12),
-          Align(alignment: Alignment.centerRight, child: views),
-        ],
-      );
-    }
     return SizedBox(
       height: 48,
       child: Row(
-        children: [const SizedBox(width: 6), brand, const Spacer(), views, const SizedBox(width: 10), actions],
+        children: [
+          const SizedBox(width: 6),
+          Expanded(child: brand),
+          views,
+          const SizedBox(width: 10),
+          actions,
+        ],
       ),
     );
   }

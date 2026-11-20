@@ -175,6 +175,7 @@ class const _Dot({
     return Pressable(
       tooltip: color.hex,
       onTap: onTap,
+      selected: selected,
       pressedScale: 1,
       builder: (context, hovered, _) => _Ring(
         size: size,
@@ -310,6 +311,12 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
             const grow = 1.8;
             final unit = (constraints.maxWidth - gap * (styles.length - 1)) / (styles.length - 1 + grow);
             final palettes = [for (final v in styles) resolveScheme(recipe.copyWith(variant: v), brightness).palettes];
+            void select(int i) {
+              if (styles[i] == recipe.variant) return;
+              HapticFeedback.selectionClick();
+              cubit.setVariant(styles[i]);
+            }
+
             return AnimatedBuilder(
               animation: _progress,
               builder: (context, _) {
@@ -321,16 +328,14 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
                   for (var x = 0.0; i < widths.length - 1 && dx > x + widths[i] + gap / 2; i++) {
                     x += widths[i] + gap;
                   }
-                  if (styles[i] == recipe.variant) return;
-                  HapticFeedback.selectionClick();
-                  cubit.setVariant(styles[i]);
+                  select(i);
                 }
 
                 return MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTapDown: (d) => pick(d.localPosition.dx),
+                    onTapUp: (d) => pick(d.localPosition.dx),
                     onHorizontalDragStart: (_) => _dragging = true,
                     onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
                     onHorizontalDragEnd: (_) => _dragging = false,
@@ -342,13 +347,18 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           for (final (i, v) in styles.indexed)
-                            _StyleBand(
-                              palettes: palettes[i],
-                              grown: weights[i],
-                              width: widths[i],
-                              first: i == 0,
-                              last: i == styles.length - 1,
+                            Pressable(
                               tooltip: '${v.mood} · ${v.title}',
+                              selected: v == recipe.variant,
+                              pressedScale: 1,
+                              onTap: () => select(i),
+                              builder: (context, _, _) => _StyleBand(
+                                palettes: palettes[i],
+                                grown: weights[i],
+                                width: widths[i],
+                                first: i == 0,
+                                last: i == styles.length - 1,
+                              ),
                             ),
                         ],
                       ),
@@ -405,7 +415,6 @@ class const _StyleBand({
   required final double width,
   required final bool first,
   required final bool last,
-  required final String tooltip,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -414,48 +423,45 @@ class const _StyleBand({
     final g = grown.clamp(0.0, 1.0);
     final round = Radius.circular(math.min(width / 2, 18));
     final inner = Radius.lerp(const Radius.circular(6), round, g)!;
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        width: width,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.horizontal(left: first ? round : inner, right: last ? round : inner),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 3,
-              child: AnimatedContainer(
-                duration: duration,
-                color: primary,
-                alignment: Alignment.center,
-                child: Opacity(
-                  opacity: g,
-                  child: Transform.scale(
-                    scale: 0.4 + 0.6 * grown,
-                    child: Icon(Icons.check_rounded, size: 18, color: primary.ink),
-                  ),
+    return Container(
+      width: width,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.horizontal(left: first ? round : inner, right: last ? round : inner),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: AnimatedContainer(
+              duration: duration,
+              color: primary,
+              alignment: Alignment.center,
+              child: Opacity(
+                opacity: g,
+                child: Transform.scale(
+                  scale: 0.4 + 0.6 * grown,
+                  child: Icon(Icons.check_rounded, size: 18, color: primary.ink),
                 ),
               ),
             ),
-            Expanded(
-              flex: 2,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: AnimatedContainer(duration: duration, color: Color(palettes[Channel.secondary]!.get(75))),
-                  ),
-                  Expanded(
-                    child: AnimatedContainer(duration: duration, color: Color(palettes[Channel.tertiary]!.get(70))),
-                  ),
-                ],
-              ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: AnimatedContainer(duration: duration, color: Color(palettes[Channel.secondary]!.get(75))),
+                ),
+                Expanded(
+                  child: AnimatedContainer(duration: duration, color: Color(palettes[Channel.tertiary]!.get(70))),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

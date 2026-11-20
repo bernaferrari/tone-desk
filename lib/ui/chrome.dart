@@ -104,14 +104,13 @@ Future<void> copyText(BuildContext context, String text, {String? label}) async 
     ..showSnackBar(SnackBar(content: Text('Copied ${label ?? text}'), duration: const Duration(milliseconds: 1400)));
 }
 
-/// Hover and press feedback for anything tappable.
+/// A focusable Material tap target for buttons with custom artwork.
 class const Pressable({
   super.key,
   required final Widget Function(BuildContext context, bool hovered, bool pressed) builder,
   required final VoidCallback? onTap,
-  final VoidCallback? onDoubleTap,
   final String? tooltip,
-  final String? semanticLabel,
+  final bool? selected,
   final double pressedScale = 0.96,
 }) extends StatefulWidget {
   @override
@@ -121,73 +120,79 @@ class const Pressable({
 class _PressableState() extends State<Pressable> {
   bool _hovered = false;
   bool _pressed = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
-    Widget child = MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        onDoubleTap: widget.onDoubleTap,
-        child: AnimatedScale(
-          scale: _pressed ? widget.pressedScale : 1,
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOutCubic,
-          child: widget.builder(context, _hovered && enabled, _pressed),
+    final colors = Theme.of(context).colorScheme;
+    final face = widget.builder(context, enabled && _hovered, enabled && _pressed);
+    Widget child = Semantics(
+      button: true,
+      enabled: enabled,
+      selected: widget.selected,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHover: (value) => setState(() => _hovered = value),
+          onHighlightChanged: (value) => setState(() => _pressed = value),
+          onFocusChange: (value) => setState(() => _focused = value),
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: _focused ? Border.all(color: colors.primary, width: 2) : null,
+            ),
+            child: AnimatedScale(
+              scale: _pressed ? widget.pressedScale : 1,
+              duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              child: face,
+            ),
+          ),
         ),
       ),
     );
-    child = Semantics(button: true, enabled: enabled, label: widget.semanticLabel, child: child);
     if (widget.tooltip case final tip?) child = Tooltip(message: tip, child: child);
     return child;
   }
 }
 
-/// Round icon button in the studio's ink.
+/// Round Material icon button in the studio's ink.
 class const StudioIconButton({
   super.key,
   required final IconData icon,
   required final String tooltip,
   required final VoidCallback? onTap,
-  final bool selected = false,
+  final bool? selected,
   final Color? ink,
   final double size = 40,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final ink = this.ink ?? colors.onSurface;
-    return Pressable(
+    final active = selected == true;
+    final buttonInk = ink ?? colors.onSurface;
+    return IconButton(
+      icon: Icon(icon),
       tooltip: tooltip,
-      onTap: onTap,
-      pressedScale: 1,
-      builder: (context, hovered, pressed) {
-        final fill = selected
-            ? (this.ink == null ? colors.primary : ink)
-            : ink.withValues(alpha: onTap == null ? 0 : (pressed ? 0.16 : (hovered ? 0.1 : 0.0)));
-        final iconColor = selected
-            ? (this.ink == null ? colors.onPrimary : ink.ink)
-            : ink.withValues(alpha: onTap == null ? 0.28 : 0.9);
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: size,
-          height: size,
-          decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-          child: Icon(icon, size: size * 0.48, color: iconColor),
-        );
-      },
+      isSelected: selected,
+      onPressed: onTap,
+      style: IconButton.styleFrom(
+        foregroundColor: active ? (ink?.ink ?? colors.onPrimary) : buttonInk,
+        backgroundColor: active ? (ink ?? colors.primary) : null,
+        minimumSize: Size.square(size),
+        iconSize: size * 0.48,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.standard,
+      ),
     );
   }
 }
 
-/// Pill button with a label and optional icon.
+/// Standard Material buttons with the studio's compact sizing.
 class const PillButton({
   super.key,
   required final String label,
@@ -199,133 +204,17 @@ class const PillButton({
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Pressable(
-      tooltip: tooltip,
-      onTap: onTap,
-      builder: (context, hovered, pressed) {
-        final bg = filled
-            ? colors.primary
-            : Color.alphaBlend(colors.onSurface.withValues(alpha: hovered ? 0.06 : 0), colors.surfaceContainerHighest);
-        final fg = filled ? colors.onPrimary : colors.onSurface;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: dense ? 32 : 40,
-          padding: EdgeInsets.symmetric(horizontal: dense ? 12 : 16),
-          decoration: BoxDecoration(
-            color: filled && hovered ? Color.alphaBlend(fg.withValues(alpha: 0.08), bg) : bg,
-            borderRadius: BorderRadius.circular(99),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[Icon(icon, size: dense ? 15 : 17, color: fg), SizedBox(width: dense ? 6 : 8)],
-              Text(
-                label,
-                style: TextStyle(color: fg, fontSize: dense ? 12.5 : 13.5, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        );
-      },
+    final style = FilledButton.styleFrom(
+      minimumSize: Size(0, dense ? 32 : 40),
+      padding: EdgeInsets.symmetric(horizontal: dense ? 12 : 16),
+      iconSize: dense ? 15 : 17,
     );
-  }
-}
-
-/// A segmented control with a sliding thumb.
-class const Segmented<T>({
-  super.key,
-  required final T value,
-  required final List<T> values,
-  required final String Function(T) label,
-  required final ValueChanged<T> onChanged,
-  final IconData Function(T)? icon,
-  final double height = 40,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final index = values.indexOf(value);
-    return Container(
-      height: height,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: colors.surfaceContainerHighest, borderRadius: BorderRadius.circular(99)),
-      child: IntrinsicWidth(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final w = constraints.maxWidth / values.length;
-                  return Stack(
-                    children: [
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOutBack,
-                        left: w * index,
-                        width: w,
-                        top: 0,
-                        bottom: 0,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colors.surface,
-                            borderRadius: BorderRadius.circular(99),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colors.shadow.withValues(alpha: 0.12),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            Row(
-              children: [
-                for (final v in values)
-                  Expanded(
-                    child: Pressable(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        onChanged(v);
-                      },
-                      pressedScale: 0.94,
-                      builder: (context, hovered, pressed) {
-                        final selected = v == value;
-                        final fg = selected ? colors.onSurface : colors.onSurfaceVariant;
-                        return Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (icon != null) ...[Icon(icon!(v), size: 15, color: fg), const SizedBox(width: 6)],
-                              Text(
-                                label(v),
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: fg,
-                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+    final leading = icon == null ? null : Icon(icon);
+    final text = Text(label);
+    final child = filled
+        ? FilledButton.icon(onPressed: onTap, style: style, icon: leading, label: text)
+        : FilledButton.tonalIcon(onPressed: onTap, style: style, icon: leading, label: text);
+    return tooltip == null ? child : Tooltip(message: tooltip!, child: child);
   }
 }
 

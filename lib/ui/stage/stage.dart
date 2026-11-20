@@ -178,6 +178,7 @@ class const _Thumb({
     return Pressable(
       tooltip: screen.label,
       onTap: onTap,
+      selected: selected,
       pressedScale: 0.92,
       builder: (context, hovered, _) => Column(
         children: [
@@ -269,7 +270,7 @@ class const _Phone({
               ),
             );
           },
-          child: KeyedSubtree(key: ValueKey(screen), child: screen.build()),
+          child: ExcludeFocus(key: ValueKey(screen), child: screen.build()),
         ),
       ),
     );

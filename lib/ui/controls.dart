@@ -6,7 +6,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../model/color_math.dart';
 import 'chrome.dart';
-import 'reel.dart';
 
 /// Keeps a cursor for a whole drag, even after the pointer leaves the control.
 class DragCursor() {
@@ -54,6 +53,50 @@ bool _sameColors(List<Color> a, List<Color> b) {
   return true;
 }
 
+class const _KeyboardAdjustment({
+  required final String label,
+  required final ValueChanged<int> onStep,
+  final VoidCallback? onActivate,
+  required final Widget child,
+}) extends StatefulWidget {
+  @override
+  State<_KeyboardAdjustment> createState() => _KeyboardAdjustmentState();
+}
+
+class _KeyboardAdjustmentState() extends State<_KeyboardAdjustment> {
+  bool _focused = false;
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowUp || LogicalKeyboardKey.arrowRight:
+        widget.onStep(1);
+      case LogicalKeyboardKey.arrowDown || LogicalKeyboardKey.arrowLeft:
+        widget.onStep(-1);
+      case LogicalKeyboardKey.enter || LogicalKeyboardKey.space when widget.onActivate != null:
+        if (event is KeyDownEvent) widget.onActivate!();
+      default:
+        return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    debugLabel: widget.label,
+    onKeyEvent: _handleKey,
+    onFocusChange: (value) => setState(() => _focused = value),
+    child: DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: _focused ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2) : null,
+      ),
+      child: widget.child,
+    ),
+  );
+}
+
 /// A rotary hue knob, a sibling of [TickKnob]: its ring of ticks is the color
 /// wheel, and its cap wears the color it makes. Drag it sideways or up and down.
 class const HueKnob({
@@ -91,45 +134,50 @@ class _HueKnobState() extends State<HueKnob> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      slider: true,
+    return _KeyboardAdjustment(
       label: widget.label,
-      value: '${widget.hue.round()} degrees',
-      increasedValue: '${((widget.hue + 5) % 360).round()} degrees',
-      decreasedValue: '${((widget.hue - 5) % 360).round()} degrees',
-      onIncrease: () => widget.onChanged((widget.hue + 5) % 360),
-      onDecrease: () => widget.onChanged((widget.hue - 5) % 360),
-      child: MouseRegion(
-        cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          onDoubleTap: widget.onReset,
-          onPanStart: (_) {
-            _cursor.show(context, SystemMouseCursors.grabbing);
-            setState(() => _active = true);
-            widget.onStart?.call();
-          },
-          onPanUpdate: (d) => widget.onChanged((widget.hue + (d.delta.dx - d.delta.dy) * 1.2) % 360),
-          onPanEnd: (_) {
-            _cursor.hide();
-            setState(() => _active = false);
-            widget.onEnd?.call();
-          },
-          child: Glide(
-            value: widget.hue,
-            instant: _active,
-            builder: (hue) => CustomPaint(
-              size: Size.square(widget.size),
-              painter: _KnobPainter(
-                hue: hue,
-                unity: widget.unity,
-                ring: widget.ring,
-                body: widget.center ?? colors.surfaceContainerLowest,
-                ink: widget.center?.ink ?? colors.onSurface,
-                rim: widget.rim ?? colors.surfaceContainerLowest,
-                lifted: _hovered || _active,
+      onStep: (direction) => widget.onChanged((widget.hue + direction * 5) % 360),
+      onActivate: widget.onTap,
+      child: Semantics(
+        slider: true,
+        label: widget.label,
+        value: '${widget.hue.round()} degrees',
+        increasedValue: '${((widget.hue + 5) % 360).round()} degrees',
+        decreasedValue: '${((widget.hue - 5) % 360).round()} degrees',
+        onIncrease: () => widget.onChanged((widget.hue + 5) % 360),
+        onDecrease: () => widget.onChanged((widget.hue - 5) % 360),
+        child: MouseRegion(
+          cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            onTap: widget.onTap,
+            onDoubleTap: widget.onReset,
+            onPanStart: (_) {
+              _cursor.show(context, SystemMouseCursors.grabbing);
+              setState(() => _active = true);
+              widget.onStart?.call();
+            },
+            onPanUpdate: (d) => widget.onChanged((widget.hue + (d.delta.dx - d.delta.dy) * 1.2) % 360),
+            onPanEnd: (_) {
+              _cursor.hide();
+              setState(() => _active = false);
+              widget.onEnd?.call();
+            },
+            child: Glide(
+              value: widget.hue,
+              instant: _active,
+              builder: (hue) => CustomPaint(
+                size: Size.square(widget.size),
+                painter: _KnobPainter(
+                  hue: hue,
+                  unity: widget.unity,
+                  ring: widget.ring,
+                  body: widget.center ?? colors.surfaceContainerLowest,
+                  ink: widget.center?.ink ?? colors.onSurface,
+                  rim: widget.rim ?? colors.surfaceContainerLowest,
+                  lifted: _hovered || _active,
+                ),
               ),
             ),
           ),
@@ -267,48 +315,52 @@ class _FaderState() extends State<Fader> {
       widget.onEnd?.call();
     }
 
-    return Semantics(
-      slider: true,
-      label: widget.semanticLabel,
-      value: widget.semanticValue,
-      increasedValue: '${((widget.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
-      decreasedValue: '${((widget.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
-      onIncrease: () => _nudge(0.05),
-      onDecrease: () => _nudge(-0.05),
-      child: MouseRegion(
-        cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onDoubleTap: widget.onReset,
-          onVerticalDragStart: vertical ? start : null,
-          onVerticalDragUpdate: vertical ? (d) => update(d.localPosition) : null,
-          onVerticalDragEnd: vertical ? end : null,
-          onHorizontalDragStart: vertical ? null : start,
-          onHorizontalDragUpdate: vertical ? null : (d) => update(d.localPosition),
-          onHorizontalDragEnd: vertical ? null : end,
-          onTapUp: (d) {
-            widget.onStart?.call();
-            update(d.localPosition);
-            widget.onEnd?.call();
-          },
-          child: SizedBox(
-            height: vertical ? widget.height : _thickness,
-            width: double.infinity,
-            child: Glide(
-              value: widget.value,
-              instant: _active,
-              builder: (value) => CustomPaint(
-                painter: _FaderPainter(
-                  axis: widget.axis,
-                  value: value,
-                  unity: widget.unity,
-                  range: [for (var i = 0; i < 12; i++) widget.colorAt(i / 11)],
-                  capColor: widget.colorAt(value),
-                  rim: widget.rim ?? colors.surfaceContainerLowest,
-                  scale: colors.onSurface,
-                  lifted: _active || _hovered,
+    return _KeyboardAdjustment(
+      label: widget.semanticLabel ?? 'Fader',
+      onStep: (direction) => _nudge(direction * 0.05),
+      child: Semantics(
+        slider: true,
+        label: widget.semanticLabel,
+        value: widget.semanticValue,
+        increasedValue: '${((widget.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
+        decreasedValue: '${((widget.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
+        onIncrease: () => _nudge(0.05),
+        onDecrease: () => _nudge(-0.05),
+        child: MouseRegion(
+          cursor: _active ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: widget.onReset,
+            onVerticalDragStart: vertical ? start : null,
+            onVerticalDragUpdate: vertical ? (d) => update(d.localPosition) : null,
+            onVerticalDragEnd: vertical ? end : null,
+            onHorizontalDragStart: vertical ? null : start,
+            onHorizontalDragUpdate: vertical ? null : (d) => update(d.localPosition),
+            onHorizontalDragEnd: vertical ? null : end,
+            onTapUp: (d) {
+              widget.onStart?.call();
+              update(d.localPosition);
+              widget.onEnd?.call();
+            },
+            child: SizedBox(
+              height: vertical ? widget.height : _thickness,
+              width: double.infinity,
+              child: Glide(
+                value: widget.value,
+                instant: _active,
+                builder: (value) => CustomPaint(
+                  painter: _FaderPainter(
+                    axis: widget.axis,
+                    value: value,
+                    unity: widget.unity,
+                    range: [for (var i = 0; i < 12; i++) widget.colorAt(i / 11)],
+                    capColor: widget.colorAt(value),
+                    rim: widget.rim ?? colors.surfaceContainerLowest,
+                    scale: colors.onSurface,
+                    lifted: _active || _hovered,
+                  ),
                 ),
               ),
             ),
@@ -531,32 +583,36 @@ class _TickKnobState() extends State<TickKnob> {
       ),
     );
 
-    return Semantics(
-      slider: true,
+    return _KeyboardAdjustment(
       label: widget.label,
-      value: widget.readout,
-      increasedValue: 'More',
-      decreasedValue: 'Less',
-      onIncrease: () => _set(widget.value + 0.05),
-      onDecrease: () => _set(widget.value - 0.05),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox.square(
-            dimension: widget.size,
-            child: Stack(alignment: Alignment.center, children: [ring, cap]),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.readout,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.fade,
-            style: displayStyle(20, weight: FontWeight.w500, color: changed ? colors.primary : colors.onSurface),
-          ),
-          const SizedBox(height: 2),
-          Text(widget.label, style: TextStyle(fontSize: 12.5, color: colors.onSurfaceVariant)),
-        ],
+      onStep: (direction) => _set(widget.value + direction * 0.05),
+      child: Semantics(
+        slider: true,
+        label: widget.label,
+        value: widget.readout,
+        increasedValue: 'More',
+        decreasedValue: 'Less',
+        onIncrease: () => _set(widget.value + 0.05),
+        onDecrease: () => _set(widget.value - 0.05),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox.square(
+              dimension: widget.size,
+              child: Stack(alignment: Alignment.center, children: [ring, cap]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.readout,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+              style: displayStyle(20, weight: FontWeight.w500, color: changed ? colors.primary : colors.onSurface),
+            ),
+            const SizedBox(height: 2),
+            Text(widget.label, style: TextStyle(fontSize: 12.5, color: colors.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
@@ -675,11 +731,11 @@ class _ColorDialogState() extends State<_ColorDialog> {
   late double _hue = widget.hue;
   late double _chroma = widget.chroma;
   late double _tone = widget.tone;
-  late Hct _hct = Hct.from(_hue, _chroma, _tone);
   late final _controller = TextEditingController(text: _color.hex);
   bool _valid = true;
+  bool _showInputError = false;
 
-  Color get _color => Color(_hct.toInt());
+  Color get _color => Color(Hct.from(_hue, _chroma, _tone).toInt());
 
   @override
   void dispose() {
@@ -692,8 +748,8 @@ class _ColorDialogState() extends State<_ColorDialog> {
       _hue = hue ?? _hue;
       _chroma = chroma ?? _chroma;
       _tone = tone ?? _tone;
-      _hct = Hct.from(_hue, _chroma, _tone);
       _valid = true;
+      _showInputError = false;
       _controller.text = _color.hex;
     });
   }
@@ -703,16 +759,19 @@ class _ColorDialogState() extends State<_ColorDialog> {
     setState(() {
       _valid = parsed != null;
       if (parsed == null) return;
+      _showInputError = false;
       final typed = Hct.fromInt(parsed.toARGB32());
       _hue = typed.hue;
       _chroma = typed.chroma;
       if (!widget.palette) _tone = typed.tone;
-      _hct = Hct.from(_hue, _chroma, _tone);
     });
   }
 
   void _submit() {
-    if (!_valid) return;
+    if (!_valid) {
+      setState(() => _showInputError = true);
+      return;
+    }
     Navigator.of(context).pop(widget.palette ? (hue: _hue, chroma: _chroma) : _color);
   }
 
@@ -721,9 +780,9 @@ class _ColorDialogState() extends State<_ColorDialog> {
     final colors = Theme.of(context).colorScheme;
     final palette = widget.palette;
     final swatch = _color;
-    final hueChroma = math.max(_chroma, 24.0);
     return AlertDialog(
       title: Text(widget.title, style: displayStyle(24)),
+      scrollable: true,
       content: SizedBox(
         width: 360,
         child: Column(
@@ -732,17 +791,18 @@ class _ColorDialogState() extends State<_ColorDialog> {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 120),
-              height: 104,
+              constraints: const BoxConstraints(minHeight: 80),
               decoration: BoxDecoration(color: swatch, borderRadius: BorderRadius.circular(22)),
               padding: const EdgeInsets.all(16),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 6,
                 children: [
                   Text(
                     swatch.hex,
                     style: displayStyle(26, weight: FontWeight.w600, color: swatch.ink),
                   ),
-                  const Spacer(),
                   Text(swatch.oklchCss, style: monoStyle(11.5, color: swatch.ink.withValues(alpha: 0.8))),
                 ],
               ),
@@ -756,72 +816,47 @@ class _ColorDialogState() extends State<_ColorDialog> {
               ),
             ],
             const SizedBox(height: 18),
+            Focus(
+              canRequestFocus: false,
+              onFocusChange: (focused) {
+                if (!focused && !_valid) setState(() => _showInputError = true);
+              },
+              child: TextField(
+                controller: _controller,
+                style: monoStyle(16),
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: 'Color value',
+                  hintText: '#6B3BFF',
+                  errorText: _showInputError ? 'Enter a hex, RGB, HSL, or OKLCH color.' : null,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: _typed,
+                onSubmitted: (_) => _submit(),
+              ),
+            ),
+            const SizedBox(height: 16),
             _SliderRow(
               label: 'Hue',
-              readout: '${_hct.hue.round()}°',
-              child: ColorReel(
-                value: _hue,
-                min: 0,
-                max: 360,
-                step: 15,
-                wraps: true,
-                lensColor: swatch,
-                paletteKey: (hueChroma.round(), _tone.round()),
-                colorAt: (h) => Color(Hct.from(h % 360, hueChroma, _tone).toInt()),
-                semanticLabel: 'Hue',
-                semanticValue: '${_hct.hue.round()} degrees',
-                onChanged: (h) => _slide(hue: h % 360),
-              ),
+              unit: 'degrees',
+              value: _hue,
+              max: 360,
+              onChanged: (hue) => _slide(hue: hue),
             ),
             _SliderRow(
               label: 'Chroma',
-              readout: (palette ? _chroma : _hct.chroma).round().toString(),
-              child: ColorReel(
-                value: _chroma.clamp(0.0, _maxChroma),
-                min: 0,
-                max: _maxChroma,
-                step: 5,
-                lensColor: swatch,
-                paletteKey: (_hue.round(), _tone.round()),
-                colorAt: (c) => Color(Hct.from(_hue, c, _tone).toInt()),
-                semanticLabel: 'Chroma',
-                semanticValue: (palette ? _chroma : _hct.chroma).round().toString(),
-                onChanged: (c) => _slide(chroma: c),
-              ),
+              value: _chroma,
+              max: _maxChroma,
+              onChanged: (chroma) => _slide(chroma: chroma),
             ),
             if (!palette)
               _SliderRow(
                 label: 'Tone',
-                readout: _hct.tone.round().toString(),
-                child: ColorReel(
-                  value: _tone,
-                  min: 0,
-                  max: 100,
-                  step: 5,
-                  lensColor: swatch,
-                  paletteKey: (_hue.round(), _chroma.round()),
-                  colorAt: (t) => Color(Hct.from(_hue, _chroma, t).toInt()),
-                  semanticLabel: 'Tone',
-                  semanticValue: _hct.tone.round().toString(),
-                  onChanged: (t) => _slide(tone: t),
-                ),
+                value: _tone,
+                max: 100,
+                onChanged: (tone) => _slide(tone: tone),
               ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _controller,
-              style: monoStyle(15),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '#6B3BFF · oklch(55% 0.25 285)',
-                errorText: _valid ? null : 'Try a hex, rgb(), hsl(), or oklch() value',
-                prefixIcon: Icon(Icons.tag_rounded, size: 18, color: colors.onSurfaceVariant),
-                filled: true,
-                fillColor: colors.surfaceContainerHighest,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              ),
-              onChanged: _typed,
-              onSubmitted: (_) => _submit(),
-            ),
           ],
         ),
       ),
@@ -833,136 +868,101 @@ class _ColorDialogState() extends State<_ColorDialog> {
   }
 }
 
-class const _SliderRow({required final String label, required final String readout, required final Widget child})
-    extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.onSurface),
-              ),
-              const Spacer(),
-              Text(readout, style: monoStyle(12, color: colors.onSurfaceVariant)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-/// chroma-folio's reel, lying down: drag or fling the strip of colors and the
-/// one that lands in the lens becomes the value. Tap a band to glide to it.
-class const ColorReel({
-  super.key,
+class const _SliderRow({
+  required final String label,
   required final double value,
-  required final double min,
   required final double max,
-  required final double step,
-  required final Color lensColor,
-  required final Color Function(double value) colorAt,
-
-  /// Changes whenever [colorAt] would return different colors.
-  required final Object paletteKey,
   required final ValueChanged<double> onChanged,
-  final bool wraps = false,
-  final VoidCallback? onStart,
-  final VoidCallback? onEnd,
-  final double height = 52,
-  final String? semanticLabel,
-  final String? semanticValue,
+  final String? unit,
 }) extends StatefulWidget {
   @override
-  State<ColorReel> createState() => _ColorReelState();
+  State<_SliderRow> createState() => _SliderRowState();
 }
 
-class _ColorReelState() extends State<ColorReel> with SingleTickerProviderStateMixin {
-  static const _bandLength = 30.0;
-  static const _lensInset = 6.0;
-  static const _lensOverhang = 6.0;
+class _SliderRowState() extends State<_SliderRow> {
+  late final _input = TextEditingController(text: _number);
+  late final _focus = FocusNode()..addListener(_syncInput);
 
-  late final _motion = ReelMotion(
-    vsync: this,
-    onStart: () => widget.onStart?.call(),
-    onChanged: (value) => widget.onChanged(value),
-    onEnd: () => widget.onEnd?.call(),
-  );
-  bool _pressed = false;
+  double get _value => widget.value.clamp(0, widget.max);
+  String get _number => _value.round().toString();
+
+  void _syncInput() {
+    if (!_focus.hasFocus && _input.text != _number) _input.text = _number;
+  }
+
+  @override
+  void didUpdateWidget(_SliderRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncInput();
+  }
 
   @override
   void dispose() {
-    _motion.dispose();
+    _focus.dispose();
+    _input.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    _motion
-      ..min = widget.min
-      ..max = widget.max
-      ..wraps = widget.wraps
-      ..step = widget.step
-      ..sync(widget.value);
-
-    return Semantics(
-      slider: true,
-      label: widget.semanticLabel,
-      value: widget.semanticValue,
-      increasedValue: '${(widget.value + widget.step).round()}',
-      decreasedValue: '${(widget.value - widget.step).round()}',
-      onIncrease: () => _motion.nudge(widget.step),
-      onDecrease: () => _motion.nudge(-widget.step),
-      child: Container(
-        height: widget.height,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: colors.surfaceContainerHighest, borderRadius: BorderRadius.circular(22)),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final band = math.min(_bandLength, constraints.maxWidth / 7);
-            _motion.pixelsPerUnit = band / widget.step;
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: ReelSurface(
-                    motion: _motion,
-                    axis: Axis.horizontal,
-                    onPressedChanged: (pressed) => setState(() => _pressed = pressed),
-                    child: CustomPaint(
-                      painter: ReelStripPainter(
-                        motion: _motion,
-                        axis: Axis.horizontal,
-                        paletteKey: (widget.paletteKey, band),
-                        colorAt: widget.colorAt,
-                      ),
+    final unit = widget.unit;
+    final label = unit == null ? widget.label : '${widget.label} ($unit)';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.label, style: Theme.of(context).textTheme.labelLarge),
+          Row(
+            spacing: 8,
+            children: [
+              Expanded(
+                child: Semantics(
+                  label: label,
+                  child: Slider(
+                    value: _value,
+                    max: widget.max,
+                    divisions: widget.max.round(),
+                    semanticFormatterCallback: (value) => unit == null ? '${value.round()}' : '${value.round()} $unit',
+                    onChanged: (value) {
+                      if (_focus.hasFocus) _focus.unfocus();
+                      widget.onChanged(value);
+                    },
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 70,
+                child: Semantics(
+                  label: '$label value',
+                  child: TextField(
+                    controller: _input,
+                    focusNode: _focus,
+                    textAlign: TextAlign.center,
+                    style: monoStyle(16),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      TextInputFormatter.withFunction((previous, next) {
+                        final number = int.tryParse(next.text);
+                        return next.text.isEmpty || (number != null && number <= widget.max) ? next : previous;
+                      }),
+                    ],
+                    decoration: InputDecoration(
+                      suffixText: unit == 'degrees' ? '°' : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      border: const OutlineInputBorder(),
                     ),
+                    onChanged: (text) {
+                      if (double.tryParse(text) case final value?) widget.onChanged(value);
+                    },
                   ),
                 ),
-                Positioned(
-                  top: _lensInset,
-                  bottom: _lensInset,
-                  width: band + _lensOverhang * 2,
-                  child: ListenableBuilder(
-                    listenable: _motion,
-                    builder: (context, _) =>
-                        ReelLens(color: widget.lensColor, pressed: _pressed, push: Offset(_motion.overshoot, 0)),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

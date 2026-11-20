@@ -7,9 +7,18 @@ import 'package:material_ui/material_ui.dart';
 /// Ranks the colors of an image the way Android picks them from a wallpaper.
 Future<List<Color>> seedsFromImage(Uint8List bytes) async {
   final codec = await ui.instantiateImageCodec(bytes, targetWidth: 112);
-  final image = (await codec.getNextFrame()).image;
-  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-  image.dispose();
+  final ui.Image image;
+  try {
+    image = (await codec.getNextFrame()).image;
+  } finally {
+    codec.dispose();
+  }
+  final ByteData? data;
+  try {
+    data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  } finally {
+    image.dispose();
+  }
   if (data == null) return const [];
 
   final pixels = <int>[];

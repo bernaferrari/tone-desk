@@ -9,99 +9,124 @@ import '../model/image_seeds.dart';
 import '../state/studio_cubit.dart';
 import 'chrome.dart';
 
+typedef _PhotoChoice = ({Color? seed, bool retry});
+
 /// Lets the user choose a photo, then one of the seeds found in it.
 Future<void> pickSeedFromImage(BuildContext context) async {
   final cubit = context.read<StudioCubit>();
-  final file = await openFile(
-    acceptedTypeGroups: const [
-      XTypeGroup(
-        label: 'Images',
-        extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'],
-        mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'],
-        uniformTypeIdentifiers: ['public.image'],
-      ),
-    ],
-  );
-  if (file == null || !context.mounted) return;
-  final bytes = await file.readAsBytes();
-  if (!context.mounted) return;
-  final picked = await showDialog<Color>(
-    context: context,
-    builder: (_) => _ImageSeedDialog(bytes: bytes),
-  );
-  if (picked != null) cubit.setSeed(picked);
+  while (context.mounted) {
+    final XFile? file;
+    try {
+      file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'],
+            mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'],
+            uniformTypeIdentifiers: ['public.image'],
+          ),
+        ],
+      );
+    } on Exception {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the photo picker.')));
+      }
+      return;
+    }
+    final selectedFile = file;
+    if (selectedFile == null || !context.mounted) return;
+    final choice = await showDialog<_PhotoChoice>(
+      context: context,
+      builder: (_) => _ImageSeedDialog(file: selectedFile),
+    );
+    if (choice?.retry == true) continue;
+    final seed = choice?.seed;
+    if (context.mounted && seed != null) cubit.setSeed(seed);
+    return;
+  }
 }
 
-class const _ImageSeedDialog({required final Uint8List bytes}) extends StatefulWidget {
+class const _ImageSeedDialog({required final XFile file}) extends StatefulWidget {
   @override
   State<_ImageSeedDialog> createState() => _ImageSeedDialogState();
 }
 
 class _ImageSeedDialogState() extends State<_ImageSeedDialog> {
-  late final Future<List<Color>> _seeds = seedsFromImage(widget.bytes);
+  late final _photo = _readPhoto();
+
+  Future<({Uint8List bytes, List<Color> seeds})> _readPhoto() async {
+    final bytes = await widget.file.readAsBytes();
+    return (bytes: bytes, seeds: await seedsFromImage(bytes));
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Text('Pick a seed', style: displayStyle(24)),
-      content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 260),
-                child: Image.memory(widget.bytes, fit: BoxFit.cover, width: double.infinity),
+    return FutureBuilder(
+      future: _photo,
+      builder: (context, snapshot) {
+        final photo = snapshot.data;
+        final String? problem = snapshot.hasError
+            ? 'Could not read this image. Try a different photo.'
+            : photo?.seeds.isEmpty == true
+            ? 'No usable colors found in this image.'
+            : null;
+        return AlertDialog(
+          title: Text('Pick a color from a photo', style: displayStyle(24)),
+          scrollable: true,
+          content: SizedBox(
+            width: 380,
+            child: switch (problem) {
+              final message? => Semantics(liveRegion: true, child: Text(message)),
+              _ when photo == null => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(semanticsLabel: 'Finding colors'),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'The colors Android would choose from this as a wallpaper.',
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder(
-              future: _seeds,
-              builder: (context, snapshot) {
-                final seeds = snapshot.data;
-                if (seeds == null) {
-                  return const SizedBox(height: 56, child: Center(child: LinearProgressIndicator()));
-                }
-                if (seeds.isEmpty) return const Text('No usable colors found in this image.');
-                return Row(
-                  children: [
-                    for (final seed in seeds)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Pressable(
-                            tooltip: seed.hex,
-                            onTap: () => Navigator.of(context).pop(seed),
-                            builder: (context, hovered, _) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              height: 56,
-                              decoration: BoxDecoration(
-                                color: seed,
-                                borderRadius: BorderRadius.circular(hovered ? 20 : 16),
-                              ),
-                            ),
-                          ),
-                        ),
+              _ => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 16,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: Image.memory(
+                        photo.bytes,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        excludeFromSemantics: true,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
-                  ],
-                );
-              },
-            ),
+                    ),
+                  ),
+                  Text('Choose a color to use in your theme.', style: TextStyle(color: colors.onSurfaceVariant)),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final seed in photo.seeds)
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: seed, foregroundColor: seed.ink),
+                          onPressed: () => Navigator.of(context).pop<_PhotoChoice>((seed: seed, retry: false)),
+                          child: Text(seed.hex),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            },
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            if (problem != null)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop<_PhotoChoice>((seed: null, retry: true)),
+                child: const Text('Choose another photo'),
+              ),
           ],
-        ),
-      ),
-      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel'))],
+        );
+      },
     );
   }
 }
-
-/// Drag across hue and tone; the whole studio follows your finger.

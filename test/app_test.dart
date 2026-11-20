@@ -1,8 +1,14 @@
+import 'package:flutter/services.dart';
 import 'package:tone_desk/main.dart';
+import 'package:tone_desk/model/exporters.dart';
 import 'package:tone_desk/model/recipe.dart';
+import 'package:tone_desk/model/roles.dart';
 import 'package:tone_desk/state/studio_cubit.dart';
 import 'package:tone_desk/ui/chrome.dart';
 import 'package:tone_desk/ui/controls.dart';
+import 'package:tone_desk/ui/desk.dart';
+import 'package:tone_desk/ui/export_board.dart';
+import 'package:tone_desk/ui/scheme_board.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
@@ -11,8 +17,8 @@ import 'package:material_ui/material_ui.dart';
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
-  Future<StudioCubit> boot(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 960);
+  Future<StudioCubit> boot(WidgetTester tester, {Size viewport = const Size(1600, 960)}) async {
+    tester.view.physicalSize = viewport;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final cubit = StudioCubit();
@@ -51,7 +57,7 @@ void main() {
     await boot(tester);
     for (final tooltip in ['Surprise me (Space)', 'Use a photo']) {
       final button = find.byTooltip(tooltip);
-      final face = find.descendant(of: button, matching: find.byType(AnimatedContainer)).first;
+      final face = find.descendant(of: button, matching: find.byType(Icon)).first;
       final bounds = tester.getRect(face);
       final press = await tester.startGesture(bounds.center);
       await tester.pump(const Duration(milliseconds: 100));
@@ -61,6 +67,96 @@ void main() {
       expect(tester.getRect(face), bounds);
       await press.cancel();
       await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('Tab reaches the toolbar and Space activates the focused button', (tester) async {
+    final cubit = await boot(tester);
+    final seed = cubit.state.recipe.seed;
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(find.byType(ExportBoard), findsOneWidget);
+    expect(cubit.state.recipe.seed, seed);
+  });
+
+  testWidgets('a focused rotary knob responds to arrow keys', (tester) async {
+    final cubit = await boot(tester);
+    final knob = find.byType(TickKnob).first;
+    final face = find.descendant(of: knob, matching: find.byType(CustomPaint));
+    Focus.of(tester.element(face)).requestFocus();
+    await tester.pump();
+    final before = cubit.state.recipe.vivid;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.vivid, lessThan(before));
+  });
+
+  testWidgets('the 320 px toolbar and export format are usable', (tester) async {
+    final cubit = await boot(tester, viewport: const Size(320, 700));
+    await tester.tap(find.byTooltip('Studio actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('About Tone Desk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Export theme (E)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownMenu<ExportFormat>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CSS').last);
+    await tester.pumpAndSettle();
+    expect(cubit.state.exportFormat, ExportFormat.css);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the custom color picker scrolls and saves in a short viewport', (tester) async {
+    final cubit = await boot(tester);
+    await tester.tap(find.byTooltip('Type a color'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(800, 380);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog);
+    final sliders = find.descendant(of: dialog, matching: find.byType(Slider));
+    expect(sliders, findsNWidgets(3));
+    final chroma = find
+        .descendant(
+          of: dialog,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is TextField && widget.keyboardType == TextInputType.number,
+          ),
+        )
+        .at(1);
+    await tester.ensureVisible(chroma);
+    await tester.enterText(chroma, '38');
+    await tester.pump();
+    expect(tester.widget<Slider>(sliders.at(1)).value, 38);
+
+    final field = find.widgetWithText(TextField, 'Color value');
+    await tester.ensureVisible(field);
+    await tester.enterText(field, '#123456');
+    await tester.pump();
+    await tester.tap(find.text('Use color'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.seed, const Color(0xFF123456));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('All colors includes foreground, fixed and utility roles', (tester) async {
+    await boot(tester);
+    await tester.tap(find.byTooltip('All colors (C)'));
+    await tester.pumpAndSettle();
+    final board = find.byType(SchemeBoard);
+    final scrollable = find.descendant(of: board, matching: find.byType(Scrollable));
+    for (final role in [Role.onPrimary, Role.onTertiaryFixedVariant, Role.shadow]) {
+      final tile = find.descendant(of: board, matching: find.text(role.label));
+      await tester.scrollUntilVisible(tile, 300, scrollable: scrollable);
+      expect(tile.hitTestable(), findsOneWidget);
     }
   });
 
@@ -144,9 +240,20 @@ void main() {
     final cubit = await boot(tester);
     cubit.setMixerOpen(true);
     await tester.pumpAndSettle();
+    List<BorderRadius> corners() =>
+        tester.widgetList<ChannelStrip>(find.byType(ChannelStrip)).map((strip) => strip.radius).toList();
+    final columns = corners();
+    expect(columns.first.topLeft.x, greaterThan(columns.first.topRight.x));
+    expect(columns.last.topRight.x, greaterThan(columns.last.topLeft.x));
+    expect(columns[1].topLeft, columns.first.topRight);
+
     await tester.tap(find.byTooltip('Lay the channels down as rows'));
     await tester.pumpAndSettle();
     expect(cubit.state.mixerRows, isTrue);
+    final rows = corners();
+    expect(rows.first.topLeft, columns.first.topLeft);
+    expect(rows.first.bottomLeft, columns.first.topRight);
+    expect(rows.last.bottomLeft, columns.last.topRight);
 
     final fader = find.byType(Fader).first;
     await tester.ensureVisible(fader);
