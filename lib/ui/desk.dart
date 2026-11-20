@@ -10,6 +10,10 @@ import '../state/studio_cubit.dart';
 import 'chrome.dart';
 import 'controls.dart';
 
+const _stripGap = 2.0;
+const _outerRadius = Radius.circular(20);
+const _innerRadius = Radius.circular(4);
+
 /// The six tonal palettes as channel strips: standing side by side on a desk,
 /// or lying down as rows.
 class const Mixer({super.key}) extends StatelessWidget {
@@ -43,18 +47,19 @@ class const Mixer({super.key}) extends StatelessWidget {
 class const _Rows({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    const outer = Radius.circular(20);
-    const inner = Radius.circular(4);
     final last = Channel.values.length - 1;
     return Column(
-      spacing: 2,
+      spacing: _stripGap,
       children: [
         for (final (i, c) in Channel.values.indexed)
           ChannelStrip(
             channel: c,
             rows: true,
             labelSize: 13,
-            radius: BorderRadius.vertical(top: i == 0 ? outer : inner, bottom: i == last ? outer : inner),
+            radius: BorderRadius.vertical(
+              top: i == 0 ? _outerRadius : _innerRadius,
+              bottom: i == last ? _outerRadius : _innerRadius,
+            ),
           ),
       ],
     );
@@ -66,8 +71,8 @@ class const _Desk({super.key}) extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const gap = 5.0;
-        final strip = (constraints.maxWidth - gap * (Channel.values.length - 1)) / Channel.values.length;
+        final last = Channel.values.length - 1;
+        final strip = (constraints.maxWidth - _stripGap * last) / Channel.values.length;
         // One size for every name, small enough for the longest to fit.
         final base = DefaultTextStyle.of(context).style.merge(ChannelStrip.labelStyle(11.5));
         var widest = 0.0;
@@ -83,12 +88,19 @@ class const _Desk({super.key}) extends StatelessWidget {
         }
         final labelSize = 11.5 * math.min(1.0, (strip - 8) / widest);
         return Row(
-          spacing: gap,
+          spacing: _stripGap,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final c in Channel.values)
+            for (final (i, c) in Channel.values.indexed)
               Expanded(
-                child: ChannelStrip(channel: c, labelSize: labelSize),
+                child: ChannelStrip(
+                  channel: c,
+                  labelSize: labelSize,
+                  radius: BorderRadius.horizontal(
+                    left: i == 0 ? _outerRadius : _innerRadius,
+                    right: i == last ? _outerRadius : _innerRadius,
+                  ),
+                ),
               ),
           ],
         );
@@ -115,7 +127,7 @@ class const ChannelStrip({
   required final Channel channel,
   final bool rows = false,
   final double labelSize = 11.5,
-  final BorderRadius radius = const BorderRadius.all(Radius.circular(16)),
+  required final BorderRadius radius,
 }) extends StatelessWidget {
   static TextStyle labelStyle(double size) => TextStyle(fontSize: size, fontWeight: FontWeight.w600);
 

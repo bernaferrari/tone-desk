@@ -25,7 +25,7 @@ The preview is real Material 3 widgets on five screens: a music recap, a profile
 ## The mixer, for brand colors
 
 <p align="center">
-  <img src="docs/screenshots/mixer.webp" width="100%" alt="The mixer in the dark studio: six channel strips, each with a hue knob over a color fader, beside two pink phone previews">
+  <img src="docs/screenshots/mixer.webp" width="100%" alt="Tone Desk in light mode with six connected mixer channels and two phone previews using the Expressive style with a yellow seed">
 </p>
 
 Open **More options** when a brand needs its own colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own channel strip, like a mixing desk:

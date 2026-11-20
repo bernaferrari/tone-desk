@@ -41,19 +41,24 @@ class _SchemeBoardState() extends State<SchemeBoard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
           children: [
-            Expanded(
-              child: Text(
-                'Click any color to copy it.',
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
+            Text(
+              'Choose a color to copy its hex value.',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
-            Segmented<Brightness>(
-              value: brightness,
-              values: const [Brightness.light, Brightness.dark],
-              label: (b) => b == Brightness.light ? 'Light' : 'Dark',
-              onChanged: (b) => setState(() => _brightness = b),
+            SegmentedButton<Brightness>(
+              showSelectedIcon: false,
+              selected: {brightness},
+              segments: const [
+                ButtonSegment(value: Brightness.light, label: Text('Light')),
+                ButtonSegment(value: Brightness.dark, label: Text('Dark')),
+              ],
+              onSelectionChanged: (selection) => setState(() => _brightness = selection.single),
             ),
           ],
         ),
@@ -68,89 +73,16 @@ class _SchemeBoardState() extends State<SchemeBoard> {
               child: ListView(
                 padding: const EdgeInsets.all(22),
                 children: [
-                  section(
-                    'Accents',
-                    _Columns(
-                      children: [
-                        for (final group in const [
-                          [Role.primary, Role.primaryContainer],
-                          [Role.secondary, Role.secondaryContainer],
-                          [Role.tertiary, Role.tertiaryContainer],
-                          [Role.error, Role.errorContainer],
-                        ])
-                          Column(
-                            children: [
-                              _RoleTile(role: group[0], colors: c, height: 96),
-                              const SizedBox(height: 6),
-                              _RoleTile(role: group[1], colors: c, height: 72),
-                            ],
-                          ),
-                      ],
+                  for (final group in RoleGroup.values)
+                    section(
+                      group.label,
+                      _Columns(
+                        children: [
+                          for (final role in Role.values.where((role) => role.group == group))
+                            _RoleTile(role: role, colors: c),
+                        ],
+                      ),
                     ),
-                  ),
-                  section(
-                    'Surfaces',
-                    Column(
-                      children: [
-                        _Columns(
-                          spacing: 6,
-                          children: [
-                            for (final r in const [Role.surfaceDim, Role.surface, Role.surfaceBright])
-                              _RoleTile(role: r, colors: c, height: 76, outlined: true),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        _Columns(
-                          spacing: 6,
-                          children: [
-                            for (final r in const [
-                              Role.surfaceContainerLowest,
-                              Role.surfaceContainerLow,
-                              Role.surfaceContainer,
-                              Role.surfaceContainerHigh,
-                              Role.surfaceContainerHighest,
-                            ])
-                              _RoleTile(
-                                role: r,
-                                colors: c,
-                                height: 92,
-                                outlined: true,
-                                shortLabel: r.label.replaceFirst('surfaceContainer', 'container '),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        _Columns(
-                          spacing: 6,
-                          children: [
-                            for (final r in const [
-                              Role.onSurface,
-                              Role.onSurfaceVariant,
-                              Role.outline,
-                              Role.outlineVariant,
-                            ])
-                              _RoleTile(role: r, colors: c, height: 64),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  section(
-                    'Fixed & inverse',
-                    _Columns(
-                      spacing: 6,
-                      children: [
-                        for (final r in const [
-                          Role.primaryFixed,
-                          Role.secondaryFixed,
-                          Role.tertiaryFixed,
-                          Role.inverseSurface,
-                          Role.inversePrimary,
-                        ])
-                          _RoleTile(role: r, colors: c, height: 72),
-                      ],
-                    ),
-                  ),
                   section(
                     'Tonal palettes',
                     Column(
@@ -173,13 +105,14 @@ class _SchemeBoardState() extends State<SchemeBoard> {
   }
 }
 
-class const _Columns({required final List<Widget> children, final double spacing = 10}) extends StatelessWidget {
+class const _Columns({required final List<Widget> children}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Wrap to two per row on narrow screens.
-        final perRow = constraints.maxWidth < 520 && children.length > 2 ? 2 : children.length;
+        const spacing = 10.0;
+        final minTileWidth = MediaQuery.textScalerOf(context).scale(164);
+        final perRow = ((constraints.maxWidth + spacing) / (minTileWidth + spacing)).floor().clamp(1, 4);
         final width = (constraints.maxWidth - spacing * (perRow - 1)) / perRow;
         return Wrap(
           spacing: spacing,
@@ -191,13 +124,7 @@ class const _Columns({required final List<Widget> children, final double spacing
   }
 }
 
-class const _RoleTile({
-  required final Role role,
-  required final ColorScheme colors,
-  final double height = 80,
-  final bool outlined = false,
-  final String? shortLabel,
-}) extends StatelessWidget {
+class const _RoleTile({required final Role role, required final ColorScheme colors}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = role.of(colors);
@@ -210,27 +137,30 @@ class const _RoleTile({
       pressedScale: 0.97,
       builder: (context, hovered, _) => AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: height,
+        constraints: const BoxConstraints(minHeight: 74),
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(hovered ? 20 : 16),
-          border: outlined ? Border.all(color: colors.outlineVariant.withValues(alpha: 0.7)) : null,
+          border: Border.all(color: ink.withValues(alpha: 0.18)),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              shortLabel ?? role.label,
+              role.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: monoStyle(11.5, weight: FontWeight.w700, color: ink),
             ),
-            const Spacer(),
-            Row(
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 Text(bg.hex, style: monoStyle(10.5, color: ink.withValues(alpha: 0.85))),
-                const Spacer(),
                 Text(
                   ratio != null && hovered ? '${ratio.toStringAsFixed(1)}:1' : 'T${bg.tone}',
                   style: monoStyle(10.5, color: ink.withValues(alpha: 0.85)),
@@ -248,22 +178,23 @@ class const _PaletteRow({required final Channel channel, required final TonalPal
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 8,
       children: [
-        SizedBox(
-          width: 118,
-          child: Text(
-            channel.label,
-            style: TextStyle(fontWeight: FontWeight.w600, color: colors.onSurface, fontSize: 13),
-          ),
-        ),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Row(
+        Text(channel.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: colors.onSurface)),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const gap = 2.0;
+            final perRow = ((constraints.maxWidth + gap) / (44 + gap)).floor().clamp(1, paletteTones.length);
+            final width = (constraints.maxWidth - gap * (perRow - 1)) / perRow;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
               children: [
                 for (final tone in paletteTones)
-                  Expanded(
+                  SizedBox(
+                    width: width,
                     child: Builder(
                       builder: (context) {
                         final color = Color(palette.get(tone));
@@ -271,27 +202,19 @@ class const _PaletteRow({required final Channel channel, required final TonalPal
                           tooltip: '${channel.label} $tone · ${color.hex}',
                           onTap: () => copyText(context, color.hex, label: '${channel.label} T$tone ${color.hex}'),
                           pressedScale: 1,
-                          builder: (context, hovered, _) => Container(
-                            height: 48,
-                            color: color,
-                            alignment: Alignment.bottomCenter,
-                            padding: const EdgeInsets.only(bottom: 5),
-                            child: Text(
-                              '$tone',
-                              style: monoStyle(
-                                hovered ? 11 : 9,
-                                weight: hovered ? FontWeight.w800 : FontWeight.w500,
-                                color: color.ink.withValues(alpha: hovered ? 1 : 0.7),
-                              ),
-                            ),
+                          builder: (context, _, _) => Container(
+                            height: 44,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                            child: Text('$tone', style: monoStyle(10, color: color.ink)),
                           ),
                         );
                       },
                     ),
                   ),
               ],
-            ),
-          ),
+            );
+          },
         ),
       ],
     );
