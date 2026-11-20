@@ -83,13 +83,7 @@ class const _AboutDialog() extends StatelessWidget {
       actions: [
         TextButton.icon(
           onPressed: () => launchUrl(Uri.parse('https://github.com/bernaferrari/tone-desk')),
-          icon: Image.asset(
-            'assets/github-mark.png',
-            width: 16,
-            height: 16,
-            color: theme.brightness == Brightness.dark ? Colors.white : Colors.black,
-            excludeFromSemantics: true,
-          ),
+          icon: const ImageIcon(AssetImage('assets/github-mark.png'), size: 16),
           label: const Text('Source'),
         ),
         FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
