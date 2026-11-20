@@ -51,30 +51,7 @@ class const _AboutDialog() extends StatelessWidget {
               'Use the mixer to set exact brand colors.',
               style: muted,
             ),
-            const SizedBox(height: 18),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 32,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final (color, width) in [
-                      (colors.primary, 3),
-                      (colors.primaryContainer, 2),
-                      (colors.secondaryContainer, 2),
-                      (colors.tertiaryContainer, 2),
-                      (colors.tertiary, 1),
-                    ])
-                      Expanded(
-                        flex: width,
-                        child: ColoredBox(color: color),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
             Text('Keyboard shortcuts', style: theme.textTheme.labelLarge),
             const SizedBox(height: 10),
             Wrap(
