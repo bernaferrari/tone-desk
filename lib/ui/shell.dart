@@ -1,9 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../state/studio_cubit.dart';
+import 'about_dialog.dart';
 import 'chrome.dart';
 import 'export_board.dart';
 import 'scheme_board.dart';
@@ -194,11 +194,7 @@ class const _Header({final bool compact = false}) extends StatelessWidget {
           tooltip: state.isDark ? 'Light studio (D)' : 'Dark studio (D)',
           onTap: cubit.toggleBrightness,
         ),
-        StudioIconButton(
-          icon: Icons.info_outline_rounded,
-          tooltip: 'About Tone Desk',
-          onTap: () => _showAbout(context),
-        ),
+        StudioIconButton(icon: Icons.info_outline_rounded, tooltip: 'About Tone Desk', onTap: () => showAbout(context)),
       ],
     );
     final brand = Row(
@@ -227,37 +223,4 @@ class const _Header({final bool compact = false}) extends StatelessWidget {
       ),
     );
   }
-}
-
-void _showAbout(BuildContext context) {
-  final colors = Theme.of(context).colorScheme;
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      icon: const FaderMark(size: 56),
-      title: Text('Tone Desk', style: displayStyle(28)),
-      content: SizedBox(
-        width: 380,
-        child: Text(
-          'Make a Material 3 theme in three steps.\n\n'
-          'Pick a color, choose how colorful it should be, then adjust how vivid it is, '
-          'how tinted the surfaces are and how strong the contrast is. Need more? The '
-          'mixer gives every tonal palette its own hue knob and chroma slider, and lets '
-          'you set exact brand colors.\n\n'
-          'Space surprises you, I inspects the preview, D flips light and dark, '
-          'C shows every color, E exports.\n\n'
-          'Tone Desk wears your theme while you make it, the way Color Studio, '
-          'where it started in 2019, always did.',
-          style: TextStyle(height: 1.45, color: colors.onSurfaceVariant),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => launchUrl(Uri.parse('https://github.com/bernaferrari/tone-desk')),
-          child: const Text('Source on GitHub'),
-        ),
-        FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Mix')),
-      ],
-    ),
-  );
 }

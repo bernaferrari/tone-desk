@@ -335,9 +335,12 @@ class const FaderMark({super.key, final double size = 36, final Color? backgroun
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return CustomPaint(
-      size: Size.square(size),
-      painter: _FaderMarkPainter(background ?? colors.primary, ink ?? colors.onPrimary),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: CustomPaint(
+        size: Size.square(size),
+        painter: _FaderMarkPainter(background ?? colors.primary, ink ?? colors.onPrimary),
+      ),
     );
   }
 }
