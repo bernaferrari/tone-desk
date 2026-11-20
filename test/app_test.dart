@@ -243,6 +243,8 @@ void main() {
     List<BorderRadius> corners() =>
         tester.widgetList<ChannelStrip>(find.byType(ChannelStrip)).map((strip) => strip.radius).toList();
     final columns = corners();
+    expect(find.text('Hue'), findsNWidgets(Channel.values.length));
+    expect(find.text('Chroma'), findsNWidgets(Channel.values.length));
     expect(columns.first.topLeft.x, greaterThan(columns.first.topRight.x));
     expect(columns.last.topRight.x, greaterThan(columns.last.topLeft.x));
     expect(columns[1].topLeft, columns.first.topRight);
@@ -251,6 +253,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(cubit.state.mixerRows, isTrue);
     final rows = corners();
+    expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNWidgets(Channel.values.length));
+    expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNWidgets(Channel.values.length));
     expect(rows.first.topLeft, columns.first.topLeft);
     expect(rows.first.bottomLeft, columns.first.topRight);
     expect(rows.last.bottomLeft, columns.last.topRight);
