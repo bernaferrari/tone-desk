@@ -38,6 +38,9 @@ jobs:
       - run: flutter test
       - run: flutter build web --release --base-href /tone-desk/
 
+      - name: Record deployed source commit
+        run: printf '%s\n' "$GITHUB_SHA" > build/web/source-commit.txt
+
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
