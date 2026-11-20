@@ -34,15 +34,15 @@ void main() {
     await tester.tap(find.byTooltip('About Tone Desk'));
     await tester.pumpAndSettle();
 
-    final dialog = find.byType(Dialog);
+    final dialog = find.byType(AlertDialog);
     final mark = find.descendant(of: dialog, matching: find.byType(FaderMark));
     final title = find.descendant(of: dialog, matching: find.text('Tone Desk'));
     expect(tester.getSize(mark), const Size.square(44));
     expect(tester.getRect(mark).right, lessThan(tester.getRect(title).left));
     expect(find.text('Keyboard shortcuts'), findsOneWidget);
-    expect(find.text('Source on GitHub'), findsOneWidget);
+    expect(find.text('Source'), findsOneWidget);
 
-    await tester.tap(find.text('Back to studio'));
+    await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
     expect(dialog, findsNothing);
   });
