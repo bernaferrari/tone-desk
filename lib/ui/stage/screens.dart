@@ -372,7 +372,7 @@ class _ProfileScreenState() extends State<ProfileScreen> {
                   Text('Bernardo Ferrari', style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
                   Probe(
                     role: Role.onSurfaceVariant,
-                    child: Text('Designer · Porto Alegre', style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+                    child: Text('Developer · Curitiba', style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
                   ),
                   const SizedBox(height: 20),
                   Row(
