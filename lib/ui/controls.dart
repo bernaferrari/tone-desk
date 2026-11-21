@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../model/color_math.dart';
 import 'chrome.dart';
+import 'reel.dart';
 
 /// Keeps a cursor for a whole drag, even after the pointer leaves the control.
 class DragCursor() {
@@ -681,7 +682,7 @@ class _TickKnobPainter({
       old.value != value || old.lifted != lifted || old.on != on || old.cap != cap || old.off != off;
 }
 
-/// Asks for a color with hue, chroma, and tone sliders, or typed as hex, rgb(),
+/// Asks for a color with hue, chroma, and tone reels, or typed as hex, rgb(),
 /// hsl(), or oklch().
 Future<Color?> askForColor(
   BuildContext context, {
@@ -735,7 +736,8 @@ class _ColorDialogState() extends State<_ColorDialog> {
   bool _valid = true;
   bool _showInputError = false;
 
-  Color get _color => Color(Hct.from(_hue, _chroma, _tone).toInt());
+  Hct get _hct => Hct.from(_hue, _chroma, _tone);
+  Color get _color => Color(_hct.toInt());
 
   @override
   void dispose() {
@@ -779,7 +781,9 @@ class _ColorDialogState() extends State<_ColorDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final palette = widget.palette;
-    final swatch = _color;
+    final hct = _hct;
+    final swatch = Color(hct.toInt());
+    final hueChroma = math.max(_chroma, 24.0);
     return AlertDialog(
       title: Text(widget.title, style: displayStyle(24)),
       scrollable: true,
@@ -839,23 +843,53 @@ class _ColorDialogState() extends State<_ColorDialog> {
             const SizedBox(height: 16),
             _SliderRow(
               label: 'Hue',
-              unit: 'degrees',
-              value: _hue,
-              max: 360,
-              onChanged: (hue) => _slide(hue: hue),
+              readout: '${hct.hue.round()}°',
+              child: ColorReel(
+                value: _hue,
+                min: 0,
+                max: 360,
+                step: 15,
+                wraps: true,
+                lensColor: swatch,
+                paletteKey: (hueChroma.round(), _tone.round()),
+                colorAt: (h) => Color(Hct.from(h % 360, hueChroma, _tone).toInt()),
+                semanticLabel: 'Hue',
+                semanticValue: '${hct.hue.round()} degrees',
+                onChanged: (h) => _slide(hue: h % 360),
+              ),
             ),
             _SliderRow(
               label: 'Chroma',
-              value: _chroma,
-              max: _maxChroma,
-              onChanged: (chroma) => _slide(chroma: chroma),
+              readout: (palette ? _chroma : hct.chroma).round().toString(),
+              child: ColorReel(
+                value: _chroma.clamp(0.0, _maxChroma),
+                min: 0,
+                max: _maxChroma,
+                step: 5,
+                lensColor: swatch,
+                paletteKey: (_hue.round(), _tone.round()),
+                colorAt: (c) => Color(Hct.from(_hue, c, _tone).toInt()),
+                semanticLabel: 'Chroma',
+                semanticValue: (palette ? _chroma : hct.chroma).round().toString(),
+                onChanged: (c) => _slide(chroma: c),
+              ),
             ),
             if (!palette)
               _SliderRow(
                 label: 'Tone',
-                value: _tone,
-                max: 100,
-                onChanged: (tone) => _slide(tone: tone),
+                readout: hct.tone.round().toString(),
+                child: ColorReel(
+                  value: _tone,
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  lensColor: swatch,
+                  paletteKey: (_hue.round(), _chroma.round()),
+                  colorAt: (t) => Color(Hct.from(_hue, _chroma, t).toInt()),
+                  semanticLabel: 'Tone',
+                  semanticValue: hct.tone.round().toString(),
+                  onChanged: (t) => _slide(tone: t),
+                ),
               ),
           ],
         ),
@@ -868,101 +902,140 @@ class _ColorDialogState() extends State<_ColorDialog> {
   }
 }
 
-class const _SliderRow({
-  required final String label,
-  required final double value,
-  required final double max,
-  required final ValueChanged<double> onChanged,
-  final String? unit,
-}) extends StatefulWidget {
+class const _SliderRow({required final String label, required final String readout, required final Widget child})
+    extends StatelessWidget {
   @override
-  State<_SliderRow> createState() => _SliderRowState();
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.onSurface),
+              ),
+              const Spacer(),
+              Text(readout, style: monoStyle(12, color: colors.onSurfaceVariant)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
-class _SliderRowState() extends State<_SliderRow> {
-  late final _input = TextEditingController(text: _number);
-  late final _focus = FocusNode()..addListener(_syncInput);
+/// chroma-folio's reel, lying down: drag or fling the strip of colors and the
+/// one that lands in the lens becomes the value. Tap a band to glide to it.
+class const ColorReel({
+  super.key,
+  required final double value,
+  required final double min,
+  required final double max,
+  required final double step,
+  required final Color lensColor,
+  required final Color Function(double value) colorAt,
 
-  double get _value => widget.value.clamp(0, widget.max);
-  String get _number => _value.round().toString();
-
-  void _syncInput() {
-    if (!_focus.hasFocus && _input.text != _number) _input.text = _number;
-  }
-
+  /// Changes whenever [colorAt] would return different colors.
+  required final Object paletteKey,
+  required final ValueChanged<double> onChanged,
+  final bool wraps = false,
+  final VoidCallback? onStart,
+  final VoidCallback? onEnd,
+  final double height = 52,
+  final String? semanticLabel,
+  final String? semanticValue,
+}) extends StatefulWidget {
   @override
-  void didUpdateWidget(_SliderRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncInput();
-  }
+  State<ColorReel> createState() => _ColorReelState();
+}
+
+class _ColorReelState() extends State<ColorReel> with SingleTickerProviderStateMixin {
+  static const _bandLength = 30.0;
+  static const _lensInset = 6.0;
+  static const _lensOverhang = 6.0;
+
+  late final _motion = ReelMotion(
+    vsync: this,
+    onStart: () => widget.onStart?.call(),
+    onChanged: (value) => widget.onChanged(value),
+    onEnd: () => widget.onEnd?.call(),
+  );
+  bool _pressed = false;
 
   @override
   void dispose() {
-    _focus.dispose();
-    _input.dispose();
+    _motion.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final unit = widget.unit;
-    final label = unit == null ? widget.label : '${widget.label} ($unit)';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.label, style: Theme.of(context).textTheme.labelLarge),
-          Row(
-            spacing: 8,
-            children: [
-              Expanded(
-                child: Semantics(
-                  label: label,
-                  child: Slider(
-                    value: _value,
-                    max: widget.max,
-                    divisions: widget.max.round(),
-                    semanticFormatterCallback: (value) => unit == null ? '${value.round()}' : '${value.round()} $unit',
-                    onChanged: (value) {
-                      if (_focus.hasFocus) _focus.unfocus();
-                      widget.onChanged(value);
-                    },
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 70,
-                child: Semantics(
-                  label: '$label value',
-                  child: TextField(
-                    controller: _input,
-                    focusNode: _focus,
-                    textAlign: TextAlign.center,
-                    style: monoStyle(16),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      TextInputFormatter.withFunction((previous, next) {
-                        final number = int.tryParse(next.text);
-                        return next.text.isEmpty || (number != null && number <= widget.max) ? next : previous;
-                      }),
-                    ],
-                    decoration: InputDecoration(
-                      suffixText: unit == 'degrees' ? '°' : null,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                      border: const OutlineInputBorder(),
+    final colors = Theme.of(context).colorScheme;
+    _motion
+      ..min = widget.min
+      ..max = widget.max
+      ..wraps = widget.wraps
+      ..step = widget.step
+      ..sync(widget.value);
+
+    return _KeyboardAdjustment(
+      label: widget.semanticLabel ?? 'Color',
+      onStep: (direction) => _motion.nudge(direction * widget.step),
+      child: Semantics(
+        slider: true,
+        label: widget.semanticLabel,
+        value: widget.semanticValue,
+        increasedValue: '${(widget.value + widget.step).round()}',
+        decreasedValue: '${(widget.value - widget.step).round()}',
+        onIncrease: () => _motion.nudge(widget.step),
+        onDecrease: () => _motion.nudge(-widget.step),
+        child: Container(
+          height: widget.height,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: colors.surfaceContainerHighest, borderRadius: BorderRadius.circular(22)),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final band = math.min(_bandLength, constraints.maxWidth / 7);
+              _motion.pixelsPerUnit = band / widget.step;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    child: ReelSurface(
+                      motion: _motion,
+                      axis: Axis.horizontal,
+                      onPressedChanged: (pressed) => setState(() => _pressed = pressed),
+                      child: CustomPaint(
+                        painter: ReelStripPainter(
+                          motion: _motion,
+                          axis: Axis.horizontal,
+                          paletteKey: (widget.paletteKey, band),
+                          colorAt: widget.colorAt,
+                        ),
+                      ),
                     ),
-                    onChanged: (text) {
-                      if (double.tryParse(text) case final value?) widget.onChanged(value);
-                    },
                   ),
-                ),
-              ),
-            ],
+                  Positioned(
+                    top: _lensInset,
+                    bottom: _lensInset,
+                    width: band + _lensOverhang * 2,
+                    child: ListenableBuilder(
+                      listenable: _motion,
+                      builder: (context, _) =>
+                          ReelLens(color: widget.lensColor, pressed: _pressed, push: Offset(_motion.overshoot, 0)),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
   }

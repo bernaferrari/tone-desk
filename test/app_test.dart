@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:tone_desk/main.dart';
 import 'package:tone_desk/model/exporters.dart';
@@ -122,20 +123,29 @@ void main() {
     await tester.pumpAndSettle();
 
     final dialog = find.byType(AlertDialog);
-    final sliders = find.descendant(of: dialog, matching: find.byType(Slider));
-    expect(sliders, findsNWidgets(3));
-    final chroma = find
-        .descendant(
-          of: dialog,
-          matching: find.byWidgetPredicate(
-            (widget) => widget is TextField && widget.keyboardType == TextInputType.number,
-          ),
-        )
-        .at(1);
+    final reels = find.descendant(of: dialog, matching: find.byType(ColorReel));
+    expect(reels, findsNWidgets(3));
+    final chroma = reels.at(1);
     await tester.ensureVisible(chroma);
-    await tester.enterText(chroma, '38');
+    await tester.pumpAndSettle();
+    final before = tester.widget<ColorReel>(chroma).value;
+    final scrollable = find.descendant(of: dialog, matching: find.byType(Scrollable)).first;
+    final position = tester.state<ScrollableState>(scrollable).position;
+    final offset = position.pixels;
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: tester.getCenter(chroma), scrollDelta: const Offset(0, -60)),
+    );
+    await tester.pumpAndSettle();
+    expect(position.pixels, lessThan(offset));
+    expect(tester.widget<ColorReel>(chroma).value, before);
+
+    await tester.ensureVisible(chroma);
+    final strip = find.descendant(of: chroma, matching: find.byType(CustomPaint)).first;
+    Focus.of(tester.element(strip)).requestFocus();
     await tester.pump();
-    expect(tester.widget<Slider>(sliders.at(1)).value, 38);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(tester.widget<ColorReel>(chroma).value, closeTo(before + 5, .01));
 
     final field = find.widgetWithText(TextField, 'Color value');
     await tester.ensureVisible(field);
