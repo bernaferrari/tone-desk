@@ -199,7 +199,16 @@ class const ChannelStrip({
         onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
       ),
     );
-    final hueReadout = _Readout(label: 'Hue', value: '${hue.round()}°', changed: mix.hue != null);
+    final hueControl = Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 9,
+      children: [
+        knob,
+        ExcludeSemantics(
+          child: _Readout(value: '${hue.round()}°', changed: mix.hue != null),
+        ),
+      ],
+    );
     final chromaReadout = _Readout(
       label: 'Chroma',
       value: '${chroma.round()}',
@@ -234,7 +243,7 @@ class const ChannelStrip({
         child: rows
             ? Row(
                 children: [
-                  knob,
+                  hueControl,
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -252,7 +261,7 @@ class const ChannelStrip({
                                   mute,
                                 ],
                               ),
-                              Wrap(spacing: 10, runSpacing: 4, children: [hueReadout, chromaReadout]),
+                              chromaReadout,
                             ],
                           ),
                         ),
@@ -264,9 +273,7 @@ class const ChannelStrip({
               )
             : Column(
                 children: [
-                  knob,
-                  const SizedBox(height: 5),
-                  hueReadout,
+                  hueControl,
                   const SizedBox(height: 8),
                   fader,
                   const SizedBox(height: 6),
@@ -282,7 +289,7 @@ class const ChannelStrip({
   }
 }
 
-class const _Readout({required final String label, required final String value, required final bool changed})
+class const _Readout({final String? label, required final String value, required final bool changed})
     extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -296,7 +303,7 @@ class const _Readout({required final String label, required final String value, 
       fit: BoxFit.scaleDown,
       child: Text.rich(
         TextSpan(
-          text: '$label ',
+          text: label == null ? null : '$label ',
           children: [TextSpan(text: value, style: valueStyle)],
         ),
         style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),

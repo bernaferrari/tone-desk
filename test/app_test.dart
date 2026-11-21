@@ -253,13 +253,19 @@ void main() {
     await tester.pumpAndSettle();
     List<BorderRadius> corners() =>
         tester.widgetList<ChannelStrip>(find.byType(ChannelStrip)).map((strip) => strip.radius).toList();
-    void expectInlineReadouts() {
-      expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNWidgets(Channel.values.length));
+    void expectReadouts() {
+      final angles = find.textContaining(RegExp(r'^\d+°$'));
+      expect(angles, findsNWidgets(Channel.values.length));
+      expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNothing);
       expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNWidgets(Channel.values.length));
+      final primaryKnob = tester.getRect(find.byType(HueKnob).first);
+      final primaryAngle = tester.getRect(angles.first);
+      expect(primaryAngle.center.dx, closeTo(primaryKnob.center.dx, 0.01));
+      expect(primaryAngle.top - primaryKnob.bottom, greaterThanOrEqualTo(8));
     }
 
     final columns = corners();
-    expectInlineReadouts();
+    expectReadouts();
     expect(columns.first.topLeft.x, greaterThan(columns.first.topRight.x));
     expect(columns.last.topRight.x, greaterThan(columns.last.topLeft.x));
     expect(columns[1].topLeft, columns.first.topRight);
@@ -268,7 +274,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(cubit.state.mixerRows, isTrue);
     final rows = corners();
-    expectInlineReadouts();
+    expectReadouts();
     expect(rows.first.topLeft, columns.first.topLeft);
     expect(rows.first.bottomLeft, columns.first.topRight);
     expect(rows.last.bottomLeft, columns.last.topRight);
