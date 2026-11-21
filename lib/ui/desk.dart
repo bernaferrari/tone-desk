@@ -199,12 +199,11 @@ class const ChannelStrip({
         onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
       ),
     );
-    final hueReadout = _Readout(label: 'Hue', value: '${hue.round()}°', changed: mix.hue != null, inline: rows);
+    final hueReadout = _Readout(label: 'Hue', value: '${hue.round()}°', changed: mix.hue != null);
     final chromaReadout = _Readout(
       label: 'Chroma',
       value: '${chroma.round()}',
       changed: mix.chroma != null || mix.muted,
-      inline: rows,
     );
     final label = Tooltip(
       message: 'Changes ${_rolesOf(channel)}',
@@ -283,12 +282,8 @@ class const ChannelStrip({
   }
 }
 
-class const _Readout({
-  required final String label,
-  required final String value,
-  required final bool changed,
-  required final bool inline,
-}) extends StatelessWidget {
+class const _Readout({required final String label, required final String value, required final bool changed})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -297,16 +292,17 @@ class const _Readout({
       color: changed ? colors.primary : colors.onSurfaceVariant,
       weight: changed ? FontWeight.w700 : FontWeight.w500,
     );
-    if (inline) return Text('$label $value', style: valueStyle);
-
-    return Column(
-      children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text.rich(
+        TextSpan(
+          text: '$label ',
+          children: [TextSpan(text: value, style: valueStyle)],
         ),
-        Text(value, style: valueStyle),
-      ],
+        style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
+        maxLines: 1,
+        softWrap: false,
+      ),
     );
   }
 }

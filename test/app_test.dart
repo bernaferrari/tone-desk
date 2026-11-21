@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:tone_desk/main.dart';
+import 'package:tone_desk/model/color_math.dart';
 import 'package:tone_desk/model/exporters.dart';
 import 'package:tone_desk/model/recipe.dart';
 import 'package:tone_desk/model/roles.dart';
@@ -252,9 +253,13 @@ void main() {
     await tester.pumpAndSettle();
     List<BorderRadius> corners() =>
         tester.widgetList<ChannelStrip>(find.byType(ChannelStrip)).map((strip) => strip.radius).toList();
+    void expectInlineReadouts() {
+      expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNWidgets(Channel.values.length));
+      expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNWidgets(Channel.values.length));
+    }
+
     final columns = corners();
-    expect(find.text('Hue'), findsNWidgets(Channel.values.length));
-    expect(find.text('Chroma'), findsNWidgets(Channel.values.length));
+    expectInlineReadouts();
     expect(columns.first.topLeft.x, greaterThan(columns.first.topRight.x));
     expect(columns.last.topRight.x, greaterThan(columns.last.topLeft.x));
     expect(columns[1].topLeft, columns.first.topRight);
@@ -263,8 +268,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(cubit.state.mixerRows, isTrue);
     final rows = corners();
-    expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNWidgets(Channel.values.length));
-    expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNWidgets(Channel.values.length));
+    expectInlineReadouts();
     expect(rows.first.topLeft, columns.first.topLeft);
     expect(rows.first.bottomLeft, columns.first.topRight);
     expect(rows.last.bottomLeft, columns.last.topRight);
@@ -309,6 +313,30 @@ void main() {
       await tester.tap(find.descendant(of: chip, matching: find.text('Filter')));
       await tester.pumpAndSettle();
       expect(selected(), !before);
+    }
+  });
+
+  testWidgets('the preview pause icon stays legible while switching styles', (tester) async {
+    final cubit = await boot(tester);
+    cubit.setSeed(swatches[2]);
+    cubit.setVariant(Variant.content);
+    await tester.pumpAndSettle();
+
+    final pauseIcons = find.byIcon(Icons.pause_rounded).hitTestable();
+    expect(pauseIcons, findsNWidgets(2));
+    cubit.setVariant(Variant.fidelity);
+    await tester.pump();
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      for (final icon in pauseIcons.evaluate()) {
+        final fill = icon.findAncestorWidgetOfExactType<Material>()!.color!;
+        final ink = Color.alphaBlend((icon.widget as Icon).color ?? IconTheme.of(icon).color!, fill);
+        expect(
+          contrastRatio(ink, fill),
+          greaterThanOrEqualTo(3),
+          reason: '${Theme.of(icon).brightness.name}, frame $frame, ink $ink on $fill',
+        );
+      }
     }
   });
 }

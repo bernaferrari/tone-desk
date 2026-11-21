@@ -251,7 +251,11 @@ class const WrappedScreen() extends StatelessWidget {
                     IconButton(onPressed: () {}, icon: const Icon(Icons.favorite_rounded), color: c.primary),
                     Probe(
                       role: Role.primary,
-                      child: IconButton.filled(onPressed: () {}, icon: const Icon(Icons.pause_rounded)),
+                      child: IconButton.filled(
+                        onPressed: () {},
+                        // Keep the glyph in sync with the fill as the preview theme animates.
+                        icon: Icon(Icons.pause_rounded, color: c.onPrimary),
+                      ),
                     ),
                   ],
                 ),
