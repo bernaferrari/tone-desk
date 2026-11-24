@@ -17,7 +17,7 @@
 ## Three steps, no manual
 
 1. **Pick a color.** Tap one of twelve presets, type a hex, or pull a color from a photo.
-2. **How colorful?** One strip runs from calm to colorful through Material's nine dynamic color styles. Each comes with a plain name, like *Balanced* (Android's default) or *Wild*, instead of a spec term.
+2. **How colorful?** Drag across nine Material color styles, from *Gray* to *Wild*. The light and dark previews update as you drag.
 3. **Adjust.** Turn **Vivid** for more or less color, **Surface tint** for how much of it reaches the backgrounds, and **Contrast** from soft to high.
 
 The preview is real Material 3 widgets on five screens: a music recap, a profile, a trip planner, a chat and a sheet of components. Turn on the inspector (**I**) and hover anything to see which color role paints it.
@@ -25,7 +25,7 @@ The preview is real Material 3 widgets on five screens: a music recap, a profile
 ## The mixer, for brand colors
 
 <p align="center">
-  <img src="docs/screenshots/mixer.webp" width="100%" alt="Tone Desk in light mode with six connected mixer channels and two phone previews using the Expressive style with a yellow seed">
+  <img src="docs/screenshots/mixer.webp" width="100%" alt="Tone Desk in light mode with a yellow seed and the Expressive style. Each of the six mixer channels shows hue below the knob and chroma below the fader.">
 </p>
 
 Open **More options** when a brand needs its own colors. Each of the six tonal palettes (primary, secondary, tertiary, surfaces, outlines and error) gets its own channel strip, like a mixing desk:
