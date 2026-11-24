@@ -18,6 +18,7 @@ class _StageState() extends State<Stage> {
   final _inspector = InspectorController();
   MockScreen _screen = MockScreen.wrapped;
   int _direction = 1;
+  ColorScheme? _thumbScheme;
 
   void _show(MockScreen next) {
     if (next == _screen) return;
@@ -44,10 +45,15 @@ class _StageState() extends State<Stage> {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
-    final state = context.watch<StudioCubit>().state;
+    final (brightness, inspecting, settledRecipe) = context.select(
+      (StudioCubit c) => (c.state.brightness, c.state.inspecting, c.state.scrubbing ? null : c.state.recipe),
+    );
     final colors = Theme.of(context).colorScheme;
+    if (settledRecipe != null || _thumbScheme == null) {
+      _thumbScheme = resolveScheme(settledRecipe ?? cubit.state.recipe, brightness).colors;
+    }
 
-    final lights = widget.compact ? [state.brightness] : const [Brightness.light, Brightness.dark];
+    final lights = widget.compact ? [brightness] : const [Brightness.light, Brightness.dark];
 
     final phones = Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -57,17 +63,19 @@ class _StageState() extends State<Stage> {
           Flexible(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _Phone(state: state, brightness: b, screen: _screen, direction: _direction),
+              child: RepaintBoundary(
+                child: _Phone(brightness: b, screen: _screen, direction: _direction),
+              ),
             ),
           ),
       ],
     );
 
-    final status = state.inspecting ? 'Hover anything to see its color role' : null;
+    final status = inspecting ? 'Hover anything to see its color role' : null;
 
     final stage = InspectorScope(
       controller: _inspector,
-      enabled: state.inspecting,
+      enabled: inspecting,
       onPick: (role) => cubit.spotlight(role.channel),
       child: Listener(
         onPointerHover: (e) => _inspector.move(e.position),
@@ -75,7 +83,7 @@ class _StageState() extends State<Stage> {
         child: Stack(
           children: [
             Positioned.fill(child: phones),
-            if (state.inspecting) Positioned.fill(child: InspectorOverlay(controller: _inspector)),
+            if (inspecting) Positioned.fill(child: InspectorOverlay(controller: _inspector)),
             if (status != null)
               Positioned(
                 top: 22,
@@ -114,7 +122,7 @@ class _StageState() extends State<Stage> {
                 Expanded(
                   child: _ScreenStrip(
                     screen: _screen,
-                    scheme: resolveScheme(state.recipe, state.brightness).colors,
+                    scheme: _thumbScheme!,
                     onChanged: _show,
                   ),
                 ),
@@ -122,10 +130,10 @@ class _StageState() extends State<Stage> {
                   padding: const EdgeInsets.only(bottom: 22),
                   child: StudioIconButton(
                     icon: Icons.ads_click_rounded,
-                    tooltip: state.inspecting
+                    tooltip: inspecting
                         ? 'Stop inspecting (I)'
                         : 'Inspect: hover the phones to see each color role (I)',
-                    selected: state.inspecting,
+                    selected: inspecting,
                     onTap: cubit.toggleInspecting,
                   ),
                 ),
@@ -187,43 +195,31 @@ class const _Thumb({
             curve: Curves.easeOutCubic,
             width: 72,
             height: 72,
-            padding: const EdgeInsets.all(3),
             transform: Matrix4.translationValues(0, selected ? -4 : (hovered ? -2 : 0), 0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: selected ? colors.primary : colors.outlineVariant.withValues(alpha: 0.6),
-                width: 2,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: TickerMode(
-                enabled: false,
-                child: IgnorePointer(
-                  child: ExcludeSemantics(
-                    child: Theme(
-                      data: previewTheme(scheme),
-                      child: Material(
-                        color: scheme.surface,
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                          child: SizedBox(
-                            width: phoneSize.width,
-                            height: phoneSize.height,
-                            child: MediaQuery(
-                              data: MediaQuery.of(context).copyWith(padding: const EdgeInsets.only(top: 16)),
-                              child: screen.build(),
-                            ),
-                          ),
-                        ),
+            child: selected
+                ? LiveColors(
+                    builder: (context, liveColors, child) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: liveColors.primary, width: 2),
                       ),
+                      child: child,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: _ThumbScreen(screen: screen, scheme: scheme),
+                    ),
+                  )
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.6), width: 2),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: _ThumbScreen(screen: screen, scheme: scheme),
                     ),
                   ),
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -240,18 +236,71 @@ class const _Thumb({
   }
 }
 
+/// Cached thumbnail preview so scrubbing the seed doesn't rebuild all five
+/// miniature mock screens on every frame.
+class const _ThumbScreen({required final MockScreen screen, required final ColorScheme scheme}) extends StatefulWidget {
+  @override
+  State<_ThumbScreen> createState() => _ThumbScreenState();
+}
+
+class _ThumbScreenState() extends State<_ThumbScreen> {
+  Widget? _cached;
+
+  @override
+  void didUpdateWidget(_ThumbScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.screen != widget.screen || oldWidget.scheme != widget.scheme) {
+      _cached = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _cached ??= RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: TickerMode(
+          enabled: false,
+          child: IgnorePointer(
+            child: ExcludeSemantics(
+              child: Theme(
+                data: previewTheme(widget.scheme),
+                child: Material(
+                  color: widget.scheme.surface,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: phoneSize.width,
+                      height: phoneSize.height,
+                      child: MediaQuery(
+                        data: const MediaQueryData(size: phoneSize, padding: EdgeInsets.only(top: 16)),
+                        child: widget.screen.build(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class const _Phone({
-  required final StudioState state,
   required final Brightness brightness,
   required final MockScreen screen,
   required final int direction,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final scheme = resolveScheme(state.recipe, brightness);
+    final (recipe, scrubbing) = context.select((StudioCubit c) => (c.state.recipe, c.state.scrubbing));
+    final scheme = resolveScheme(recipe, brightness);
     return AnimatedTheme(
       data: previewTheme(scheme.colors),
-      duration: const Duration(milliseconds: 180),
+      duration: scrubbing ? Duration.zero : const Duration(milliseconds: 180),
       child: PhoneFrame(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 280),

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
 import 'package:material_ui/material_ui.dart';
@@ -310,7 +311,8 @@ class _FaderState() extends State<Fader> {
       update(d.localPosition);
     }
 
-    void end(DragEndDetails _) {
+    void end() {
+      if (!_active) return;
       _cursor.hide();
       setState(() => _active = false);
       widget.onEnd?.call();
@@ -336,10 +338,12 @@ class _FaderState() extends State<Fader> {
             onDoubleTap: widget.onReset,
             onVerticalDragStart: vertical ? start : null,
             onVerticalDragUpdate: vertical ? (d) => update(d.localPosition) : null,
-            onVerticalDragEnd: vertical ? end : null,
+            onVerticalDragEnd: vertical ? (_) => end() : null,
+            onVerticalDragCancel: vertical ? end : null,
             onHorizontalDragStart: vertical ? null : start,
             onHorizontalDragUpdate: vertical ? null : (d) => update(d.localPosition),
-            onHorizontalDragEnd: vertical ? null : end,
+            onHorizontalDragEnd: vertical ? null : (_) => end(),
+            onHorizontalDragCancel: vertical ? null : end,
             onTapUp: (d) {
               widget.onStart?.call();
               update(d.localPosition);
@@ -523,7 +527,8 @@ class _TickKnobState() extends State<TickKnob> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final live = LiveColorsScope.maybeOf(context);
+    final colors = live?.value ?? Theme.of(context).colorScheme;
     final changed = widget.rest != null && (widget.value - widget.rest!).abs() > 0.001;
     final capSize = widget.size - 32;
 
@@ -546,10 +551,8 @@ class _TickKnobState() extends State<TickKnob> {
             painter: _TickKnobPainter(
               value: value,
               rest: widget.rest,
-              on: colors.primary,
-              off: colors.outlineVariant,
-              cap: colors.surfaceContainerLowest,
-              rim: colors.surfaceContainerHighest,
+              fallback: colors,
+              live: live,
               lifted: _hovered || _active,
             ),
           ),
@@ -622,12 +625,12 @@ class _TickKnobState() extends State<TickKnob> {
 class _TickKnobPainter({
   required final double value,
   required final double? rest,
-  required final Color on,
-  required final Color off,
-  required final Color cap,
-  required final Color rim,
+  required final ColorScheme fallback,
+  required final ValueListenable<ColorScheme>? live,
   required final bool lifted,
 }) extends CustomPainter {
+  this : super(repaint: live);
+
   static const _start = -135.0;
   static const _sweep = 270.0;
   static const _ticks = 37;
@@ -642,6 +645,11 @@ class _TickKnobPainter({
 
   @override
   void paint(Canvas canvas, Size size) {
+    final colors = live?.value ?? fallback;
+    final on = colors.primary;
+    final off = colors.outlineVariant;
+    final cap = colors.surfaceContainerLowest;
+    final rim = colors.surfaceContainerHighest;
     final c = size.center(Offset.zero);
     final r = size.width / 2;
     Offset at(double deg, double radius) {
@@ -679,7 +687,7 @@ class _TickKnobPainter({
 
   @override
   bool shouldRepaint(_TickKnobPainter old) =>
-      old.value != value || old.lifted != lifted || old.on != on || old.cap != cap || old.off != off;
+      old.value != value || old.lifted != lifted || old.live != live || (live == null && old.fallback != fallback);
 }
 
 /// Asks for a color with hue, chroma, and tone reels, or typed as hex, rgb(),
@@ -1011,12 +1019,14 @@ class _ColorReelState() extends State<ColorReel> with SingleTickerProviderStateM
                       motion: _motion,
                       axis: Axis.horizontal,
                       onPressedChanged: (pressed) => setState(() => _pressed = pressed),
-                      child: CustomPaint(
-                        painter: ReelStripPainter(
-                          motion: _motion,
-                          axis: Axis.horizontal,
-                          paletteKey: (widget.paletteKey, band),
-                          colorAt: widget.colorAt,
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: ReelStripPainter(
+                            motion: _motion,
+                            axis: Axis.horizontal,
+                            paletteKey: (widget.paletteKey, band),
+                            colorAt: widget.colorAt,
+                          ),
                         ),
                       ),
                     ),
@@ -1027,8 +1037,11 @@ class _ColorReelState() extends State<ColorReel> with SingleTickerProviderStateM
                     width: band + _lensOverhang * 2,
                     child: ListenableBuilder(
                       listenable: _motion,
-                      builder: (context, _) =>
-                          ReelLens(color: widget.lensColor, pressed: _pressed, push: Offset(_motion.overshoot, 0)),
+                      builder: (context, _) => ReelLens(
+                        color: _motion.isEngaged ? widget.colorAt(_motion.position) : widget.lensColor,
+                        pressed: _pressed,
+                        push: Offset(_motion.overshoot, 0),
+                      ),
                     ),
                   ),
                 ],

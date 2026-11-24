@@ -24,7 +24,7 @@ class const Mixer({super.key}) extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Turn a knob to shift the hue, slide a fader for more or less color. Tap a knob to type a color.',
+          'Turn a knob for hue (°), slide a fader for chroma. Tap a knob to type a color.',
           style: TextStyle(fontSize: 12.5, height: 1.4, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 14),
@@ -118,6 +118,15 @@ String _rolesOf(Channel channel) => switch (channel) {
   Channel.error => 'error, onError, errorContainer, onErrorContainer',
 };
 
+final _ringCache = <(double, double), List<Color>>{};
+
+List<Color> _hueRing(double chroma, double tone) => _ringCache.putIfAbsent(
+  (chroma, tone),
+  () => List<Color>.unmodifiable([
+    for (var h = 0; h < 360; h += 15) Color(Hct.from(h.toDouble(), chroma, tone).toInt()),
+  ]),
+);
+
 /// One tonal palette as a channel strip: a hue knob wearing its color, a
 /// fader for how much color, and a switch that turns it gray. The strip is
 /// tinted with the palette itself, and stands up on the desk or lies down as
@@ -146,7 +155,7 @@ class const ChannelStrip({
     final hue = mix.hue ?? style.hue;
     final chroma = mix.muted ? 0.0 : palette.chroma.clamp(0.0, channel.maxChroma);
     final ringChroma = channel.maxChroma > 50 ? 48.0 : 24.0;
-    final ring = [for (var h = 0; h < 360; h += 15) Color(Hct.from(h.toDouble(), ringChroma, tone).toInt())];
+    final ring = _hueRing(ringChroma, tone);
     // Low enough that every strip carries the same weight, whatever its palette.
     final tint = Color(Hct.from(palette.hue, math.min(palette.chroma, 6), state.isDark ? 16 : 94).toInt());
     // The most color this hue can show at the track's tone; past it every
@@ -199,20 +208,26 @@ class const ChannelStrip({
         onChanged: (v) => cubit.setChannelChroma(channel, v * reach, live: true),
       ),
     );
+    // Each readout hugs its control; a wider gap between them separates hue
+    // from chroma without repeating their names on every strip.
     final hueControl = Column(
       mainAxisSize: MainAxisSize.min,
-      spacing: 9,
+      spacing: 8,
       children: [
         knob,
         ExcludeSemantics(
-          child: _Readout(value: '${hue.round()}°', changed: mix.hue != null),
+          child: Tooltip(
+            message: '${channel.label} hue',
+            child: _Readout(value: '${hue.round()}°', changed: mix.hue != null),
+          ),
         ),
       ],
     );
-    final chromaReadout = _Readout(
-      label: 'Chroma',
-      value: '${chroma.round()}',
-      changed: mix.chroma != null || mix.muted,
+    final chromaReadout = ExcludeSemantics(
+      child: Tooltip(
+        message: '${channel.label} chroma',
+        child: _Readout(value: '${chroma.round()}', changed: mix.chroma != null || mix.muted),
+      ),
     );
     final label = Tooltip(
       message: 'Changes ${_rolesOf(channel)}',
@@ -237,7 +252,7 @@ class const ChannelStrip({
       tick: state.spotlightTick,
       radius: radius,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
+        duration: state.scrubbing ? Duration.zero : const Duration(milliseconds: 220),
         padding: rows ? const EdgeInsets.fromLTRB(8, 6, 6, 4) : const EdgeInsets.fromLTRB(3, 10, 3, 6),
         decoration: BoxDecoration(color: tint, borderRadius: radius),
         child: rows
@@ -252,16 +267,12 @@ class const ChannelStrip({
                         // In line with where the fader's track starts.
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(child: label),
-                                  mute,
-                                ],
-                              ),
+                              Expanded(child: label),
                               chromaReadout,
+                              const SizedBox(width: 4),
+                              mute,
                             ],
                           ),
                         ),
@@ -274,11 +285,11 @@ class const ChannelStrip({
             : Column(
                 children: [
                   hueControl,
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 16),
                   fader,
                   const SizedBox(height: 6),
                   chromaReadout,
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   label,
                   const SizedBox(height: 4),
                   mute,
@@ -289,24 +300,19 @@ class const ChannelStrip({
   }
 }
 
-class const _Readout({final String? label, required final String value, required final bool changed})
-    extends StatelessWidget {
+class const _Readout({required final String value, required final bool changed}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final valueStyle = monoStyle(
-      11,
-      color: changed ? colors.primary : colors.onSurfaceVariant,
-      weight: changed ? FontWeight.w700 : FontWeight.w500,
-    );
     return FittedBox(
       fit: BoxFit.scaleDown,
-      child: Text.rich(
-        TextSpan(
-          text: label == null ? null : '$label ',
-          children: [TextSpan(text: value, style: valueStyle)],
+      child: Text(
+        value,
+        style: monoStyle(
+          11,
+          color: changed ? colors.primary : colors.onSurfaceVariant,
+          weight: changed ? FontWeight.w700 : FontWeight.w500,
         ),
-        style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant),
         maxLines: 1,
         softWrap: false,
       ),

@@ -47,22 +47,22 @@ class const _Section({
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 22,
-              height: 22,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
-              child: Text(
-                '$number',
-                style: monoStyle(11, weight: FontWeight.w700, color: colors.onPrimary),
+            LiveColors(
+              builder: (context, colors, _) => Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle),
+                child: Text(
+                  '$number',
+                  style: monoStyle(11, weight: FontWeight.w700, color: colors.onPrimary),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -272,6 +272,9 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
   /// Counts picks, so a style revisited mid-fade gets a fresh blurb.
   int _picks = 0;
 
+  List<Map<Channel, TonalPalette>>? _palettes;
+  Brightness? _palettesBrightness;
+
   @override
   void dispose() {
     _progress.dispose();
@@ -298,9 +301,22 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
-    final (recipe, brightness) = context.select((StudioCubit c) => (c.state.recipe, c.state.brightness));
+    final (variant, brightness, scrubbing, settledRecipe) = context.select(
+      (StudioCubit c) => (
+        c.state.recipe.variant,
+        c.state.brightness,
+        c.state.scrubbing,
+        c.state.scrubbing ? null : c.state.recipe,
+      ),
+    );
     final colors = Theme.of(context).colorScheme;
-    _retarget(styles.indexOf(recipe.variant));
+    _retarget(styles.indexOf(variant));
+    final recipe = settledRecipe ?? cubit.state.recipe;
+    if (!scrubbing || _palettes == null || _palettesBrightness != brightness) {
+      _palettes = [for (final v in styles) resolvePalettes(recipe.copyWith(variant: v), brightness)];
+      _palettesBrightness = brightness;
+    }
+    final palettes = _palettes!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -310,11 +326,16 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
             const gap = 3.0;
             const grow = 1.8;
             final unit = (constraints.maxWidth - gap * (styles.length - 1)) / (styles.length - 1 + grow);
-            final palettes = [for (final v in styles) resolveScheme(recipe.copyWith(variant: v), brightness).palettes];
-            void select(int i) {
-              if (styles[i] == recipe.variant) return;
+            void select(int i, {bool live = false}) {
+              if (styles[i] == cubit.state.recipe.variant) return;
               HapticFeedback.selectionClick();
-              cubit.setVariant(styles[i]);
+              cubit.setVariant(styles[i], live: live);
+            }
+
+            void endDrag() {
+              if (!_dragging) return;
+              _dragging = false;
+              cubit.endScrub();
             }
 
             return AnimatedBuilder(
@@ -323,12 +344,12 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
                 final weights = _weights;
                 final widths = [for (final w in weights) unit * (1 + (grow - 1) * w)];
 
-                void pick(double dx) {
+                void pick(double dx, {bool live = false}) {
                   var i = 0;
                   for (var x = 0.0; i < widths.length - 1 && dx > x + widths[i] + gap / 2; i++) {
                     x += widths[i] + gap;
                   }
-                  select(i);
+                  select(i, live: live);
                 }
 
                 return MouseRegion(
@@ -336,10 +357,14 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTapUp: (d) => pick(d.localPosition.dx),
-                    onHorizontalDragStart: (_) => _dragging = true,
-                    onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
-                    onHorizontalDragEnd: (_) => _dragging = false,
-                    onHorizontalDragCancel: () => _dragging = false,
+                    onHorizontalDragStart: (d) {
+                      _dragging = true;
+                      cubit.beginScrub();
+                      pick(d.localPosition.dx, live: true);
+                    },
+                    onHorizontalDragUpdate: (d) => pick(d.localPosition.dx, live: true),
+                    onHorizontalDragEnd: (_) => endDrag(),
+                    onHorizontalDragCancel: endDrag,
                     child: SizedBox(
                       height: 60,
                       child: Row(
@@ -358,6 +383,7 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
                                 width: widths[i],
                                 first: i == 0,
                                 last: i == styles.length - 1,
+                                instant: scrubbing,
                               ),
                             ),
                         ],
@@ -369,7 +395,15 @@ class _StylePillsState() extends State<_StylePills> with SingleTickerProviderSta
             );
           },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(styles.first.mood, style: TextStyle(fontSize: 10.5, color: colors.onSurfaceVariant)),
+            Text(styles.last.mood, style: TextStyle(fontSize: 10.5, color: colors.onSurfaceVariant)),
+          ],
+        ),
+        const SizedBox(height: 8),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           layoutBuilder: (current, previous) => SizedBox(
@@ -415,10 +449,11 @@ class const _StyleBand({
   required final double width,
   required final bool first,
   required final bool last,
+  final bool instant = false,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    const duration = Duration(milliseconds: 220);
+    final duration = instant ? Duration.zero : const Duration(milliseconds: 220);
     final primary = Color(palettes[Channel.primary]!.get(60));
     final g = grown.clamp(0.0, 1.0);
     final round = Radius.circular(math.min(width / 2, 18));
@@ -479,16 +514,18 @@ class const _Knobs() extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
-    final recipe = context.select((StudioCubit c) => c.state.recipe);
+    final (vivid, tint, contrast) = context.select(
+      (StudioCubit c) => (c.state.recipe.vivid, c.state.recipe.tint, c.state.recipe.contrast),
+    );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         Expanded(
           child: TickKnob(
             label: 'Vivid',
-            value: recipe.vivid / ThemeRecipe.vividRange.$2,
+            value: vivid / ThemeRecipe.vividRange.$2,
             rest: 1 / ThemeRecipe.vividRange.$2,
-            readout: '${(recipe.vivid * 100).round()}%',
+            readout: '${(vivid * 100).round()}%',
             onStart: cubit.beginScrub,
             onEnd: cubit.endScrub,
             onChanged: (v) => cubit.setVivid(v * ThemeRecipe.vividRange.$2, live: true),
@@ -497,9 +534,9 @@ class const _Knobs() extends StatelessWidget {
         Expanded(
           child: TickKnob(
             label: 'Surface tint',
-            value: recipe.tint / ThemeRecipe.tintRange.$2,
+            value: tint / ThemeRecipe.tintRange.$2,
             rest: 1 / ThemeRecipe.tintRange.$2,
-            readout: recipe.tint == 0 ? 'Gray' : '${(recipe.tint * 100).round()}%',
+            readout: tint == 0 ? 'Gray' : '${(tint * 100).round()}%',
             onStart: cubit.beginScrub,
             onEnd: cubit.endScrub,
             onChanged: (v) => cubit.setTint(v * ThemeRecipe.tintRange.$2, live: true),
@@ -508,9 +545,9 @@ class const _Knobs() extends StatelessWidget {
         Expanded(
           child: TickKnob(
             label: 'Contrast',
-            value: (recipe.contrast + 1) / 2,
+            value: (contrast + 1) / 2,
             rest: 0.5,
-            readout: _contrastName(recipe.contrast),
+            readout: _contrastName(contrast),
             onStart: cubit.beginScrub,
             onEnd: cubit.endScrub,
             onChanged: (v) => cubit.setContrast(v * 2 - 1, live: true),
@@ -526,10 +563,10 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
-    final state = context.watch<StudioCubit>().state;
+    final (open, mixerRows, mixed) = context.select(
+      (StudioCubit c) => (c.state.mixerOpen, c.state.mixerRows, c.state.recipe.mix.values.any((m) => !m.isUnity)),
+    );
     final colors = Theme.of(context).colorScheme;
-    final mixed = state.recipe.mix.values.any((m) => !m.isUnity);
-    final open = state.mixerOpen;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -541,7 +578,7 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
           builder: (context, hovered, _) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: SizedBox(
-              height: 32,
+              height: 36,
               child: Row(
                 children: [
                   Expanded(
@@ -589,10 +626,10 @@ class const _MoreOptions({required final bool compact}) extends StatelessWidget 
                         Padding(
                           padding: const EdgeInsets.only(right: 4),
                           child: StudioIconButton(
-                            icon: state.mixerRows ? Icons.view_column_rounded : Icons.table_rows_rounded,
-                            tooltip: state.mixerRows ? 'Stand the channels up' : 'Lay the channels down as rows',
-                            size: 32,
-                            onTap: () => cubit.setMixerRows(!state.mixerRows),
+                            icon: mixerRows ? Icons.view_column_rounded : Icons.table_rows_rounded,
+                            tooltip: mixerRows ? 'Stand the channels up' : 'Lay the channels down as rows',
+                            size: 36,
+                            onTap: () => cubit.setMixerRows(!mixerRows),
                           ),
                         ),
                         AnimatedSwitcher(

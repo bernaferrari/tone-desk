@@ -51,6 +51,33 @@ Map<Channel, TonalPalette> palettesOf(DynamicScheme s) => {
 };
 
 final _cache = <(ThemeRecipe, Brightness), StudioScheme>{};
+final _paletteCache = <(ThemeRecipe, Brightness), Map<Channel, TonalPalette>>{};
+
+/// Resolves only the tonal palettes for [recipe], skipping the 45-role
+/// [ColorScheme] contrast lookups when a caller only needs palette swatches.
+Map<Channel, TonalPalette> resolvePalettes(ThemeRecipe recipe, Brightness brightness) {
+  final key = (recipe, brightness);
+  if (_cache[key] case final hit?) return hit.palettes;
+  if (_paletteCache.remove(key) case final hit?) return _paletteCache[key] = hit;
+
+  final isDark = brightness == Brightness.dark;
+  final source = Hct.fromInt(recipe.seed.toARGB32());
+  final base = styleScheme(recipe.variant, source, isDark, recipe.contrast);
+  final palettes = <Channel, TonalPalette>{};
+  for (final MapEntry(key: channel, value: raw) in palettesOf(base).entries) {
+    final style = _scaled(raw, recipe.scaleOf(channel));
+    final mix = recipe.mixOf(channel);
+    final chroma = switch (mix) {
+      ChannelMix(muted: true) => 0.0,
+      ChannelMix(chroma: final c?) => c * recipe.scaleOf(channel),
+      _ => style.chroma,
+    };
+    palettes[channel] = mix.isUnity ? style : TonalPalette.of(mix.hue ?? style.hue, chroma);
+  }
+  _paletteCache[key] = palettes;
+  if (_paletteCache.length > 128) _paletteCache.remove(_paletteCache.keys.first);
+  return palettes;
+}
 
 /// Resolves [recipe] for [brightness].
 StudioScheme resolveScheme(ThemeRecipe recipe, Brightness brightness) {

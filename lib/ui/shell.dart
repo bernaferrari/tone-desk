@@ -41,17 +41,30 @@ class const StudioShell() extends StatelessWidget {
           actions: {_ShuffleSeedIntent: CallbackAction<_ShuffleSeedIntent>(onInvoke: (_) => cubit.shuffle())},
           child: Focus(
             autofocus: true,
-            child: Scaffold(
-              body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final w = constraints.maxWidth;
-                    if (w >= _wide && constraints.maxHeight >= 640) return const _WideLayout();
-                    if (w >= _medium && constraints.maxHeight >= 600) return const _WideLayout(column: 344);
-                    return const _NarrowLayout();
-                  },
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                RepaintBoundary(
+                  child: LiveColors(
+                    builder: (context, colors, _) => ColoredBox(color: colors.surface),
+                  ),
                 ),
-              ),
+                RepaintBoundary(
+                  child: Scaffold(
+                    backgroundColor: Colors.transparent,
+                    body: SafeArea(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final w = constraints.maxWidth;
+                          if (w >= _wide && constraints.maxHeight >= 640) return const _WideLayout();
+                          if (w >= _medium && constraints.maxHeight >= 600) return const _WideLayout(column: 344);
+                          return const _NarrowLayout();
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -173,14 +186,16 @@ class const _Header({final bool compact = false}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
-    final state = context.watch<StudioCubit>().state;
+    final (isDark, canUndo, canRedo) = context.select(
+      (StudioCubit c) => (c.state.isDark, c.state.canUndo, c.state.canRedo),
+    );
     final modifier = Theme.of(context).platform == TargetPlatform.macOS ? '⌘' : 'Ctrl+';
-    final themeLabel = state.isDark ? 'Light studio (D)' : 'Dark studio (D)';
-    final undo = state.canUndo ? cubit.undo : null;
-    final redo = state.canRedo ? cubit.redo : null;
+    final themeLabel = isDark ? 'Light studio (D)' : 'Dark studio (D)';
+    final undo = canUndo ? cubit.undo : null;
+    final redo = canRedo ? cubit.redo : null;
     final export = PillButton(
       label: 'Export',
-      dense: true,
+      dense: compact,
       icon: Icons.code_rounded,
       tooltip: 'Export theme (E)',
       onTap: () => showExport(context),
@@ -237,7 +252,7 @@ class const _Header({final bool compact = false}) extends StatelessWidget {
         const SizedBox(width: 4),
         StudioIconButton(icon: Icons.palette_outlined, tooltip: 'All colors (C)', onTap: () => showColors(context)),
         StudioIconButton(
-          icon: state.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+          icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
           tooltip: themeLabel,
           onTap: cubit.toggleBrightness,
         ),

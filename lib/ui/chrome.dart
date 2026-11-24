@@ -1,8 +1,43 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../model/color_math.dart';
+
+/// Live [ColorScheme] for studio chrome while scrubbing, avoiding a full-tree
+/// [MaterialApp] theme rebuild on every drag frame.
+class const LiveColorsScope({
+  super.key,
+  required final ValueNotifier<ColorScheme> colors,
+  required super.child,
+}) extends InheritedWidget {
+  static ValueListenable<ColorScheme>? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<LiveColorsScope>()?.colors;
+
+  static void preview(BuildContext context, ColorScheme scheme) {
+    final notifier = context.getInheritedWidgetOfExactType<LiveColorsScope>()?.colors;
+    if (notifier != null && notifier.value != scheme) notifier.value = scheme;
+  }
+
+  @override
+  bool updateShouldNotify(LiveColorsScope old) => old.colors != colors;
+}
+
+/// Rebuilds only its own small subtree when the live studio [ColorScheme]
+/// changes during a scrub.
+class const LiveColors({
+  super.key,
+  required final Widget Function(BuildContext context, ColorScheme colors, Widget? child) builder,
+  final Widget? child,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final live = LiveColorsScope.maybeOf(context);
+    if (live == null) return builder(context, Theme.of(context).colorScheme, child);
+    return ValueListenableBuilder<ColorScheme>(valueListenable: live, builder: builder, child: child);
+  }
+}
 
 const phoneBreakpoint = 720.0;
 const deskBreakpoint = 1180.0;
@@ -23,26 +58,32 @@ Future<void> preloadFonts() async {
   } on Object catch (_) {}
 }
 
+final _displayFonts = <(FontWeight, bool), TextStyle>{};
+final _monoFonts = <(FontWeight, bool), TextStyle>{};
+
 TextStyle displayStyle(double size, {Color? color, FontWeight weight = FontWeight.w600, double height = 1}) {
-  final style = TextStyle(
-    fontSize: size,
-    fontWeight: weight,
-    height: height,
-    letterSpacing: -size * 0.035,
-    color: color,
+  final fetch = _fetch();
+  final base = _displayFonts.putIfAbsent(
+    (weight, fetch),
+    () => fetch ? GoogleFonts.bricolageGrotesque(fontWeight: weight) : TextStyle(fontWeight: weight),
   );
-  return _fetch() ? GoogleFonts.bricolageGrotesque(textStyle: style) : style;
+  return base.copyWith(fontSize: size, height: height, letterSpacing: -size * 0.035, color: color);
 }
 
 TextStyle monoStyle(double size, {Color? color, FontWeight weight = FontWeight.w500, double? letterSpacing}) {
-  final style = TextStyle(
+  final fetch = _fetch();
+  final base = _monoFonts.putIfAbsent(
+    (weight, fetch),
+    () => fetch
+        ? GoogleFonts.geistMono(fontWeight: weight)
+        : TextStyle(fontFamily: 'monospace', fontWeight: weight),
+  );
+  return base.copyWith(
     fontSize: size,
-    fontWeight: weight,
     color: color,
     letterSpacing: letterSpacing,
     fontFeatures: const [FontFeature.tabularFigures()],
   );
-  return _fetch() ? GoogleFonts.geistMono(textStyle: style) : style.copyWith(fontFamily: 'monospace');
 }
 
 /// Small uppercase label, like the silk-screen on a mixing desk.
@@ -53,10 +94,20 @@ TextStyle legendStyle(BuildContext context, {Color? color}) => monoStyle(
   color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
 );
 
+final _geistTextThemes = <(Brightness, bool), TextTheme>{};
+
+TextTheme _geistBaseTextTheme(ThemeData base) {
+  final fetch = _fetch();
+  return _geistTextThemes.putIfAbsent(
+    (base.brightness, fetch),
+    () => fetch ? GoogleFonts.geistTextTheme(base.textTheme) : base.textTheme,
+  );
+}
+
 /// The studio dresses itself in the theme being made.
 ThemeData studioTheme(ColorScheme colors) {
   final base = ThemeData(useMaterial3: true, colorScheme: colors, brightness: colors.brightness);
-  final text = _fetch() ? GoogleFonts.geistTextTheme(base.textTheme) : base.textTheme;
+  final text = _geistBaseTextTheme(base);
   return base.copyWith(
     textTheme: text.apply(bodyColor: colors.onSurface, displayColor: colors.onSurface),
     scaffoldBackgroundColor: colors.surface,
@@ -85,14 +136,26 @@ ThemeData studioTheme(ColorScheme colors) {
   );
 }
 
+final _previewBaseThemes = <(Brightness, bool), ThemeData>{};
+final _previewTextThemes = <(Brightness, Color, bool), TextTheme>{};
+
 /// Theme for mock app screens: Material defaults, nothing studio-specific.
 ThemeData previewTheme(ColorScheme colors) {
-  final base = ThemeData(useMaterial3: true, colorScheme: colors, brightness: colors.brightness);
-  final text = _fetch() ? GoogleFonts.geistTextTheme(base.textTheme) : base.textTheme;
-  return base.copyWith(
-    textTheme: text.apply(bodyColor: colors.onSurface, displayColor: colors.onSurface),
-    splashFactory: InkSparkle.splashFactory,
+  final fetch = _fetch();
+  final base = _previewBaseThemes.putIfAbsent(
+    (colors.brightness, fetch),
+    () => ThemeData(
+      useMaterial3: true,
+      brightness: colors.brightness,
+      splashFactory: InkSparkle.splashFactory,
+    ),
   );
+  final text = _previewTextThemes.putIfAbsent(
+    (colors.brightness, colors.onSurface, fetch),
+    () => _geistBaseTextTheme(base).apply(bodyColor: colors.onSurface, displayColor: colors.onSurface),
+  );
+  if (_previewTextThemes.length > 64) _previewTextThemes.remove(_previewTextThemes.keys.first);
+  return base.copyWith(colorScheme: colors, textTheme: text);
 }
 
 Future<void> copyText(BuildContext context, String text, {String? label}) async {
@@ -204,17 +267,26 @@ class const PillButton({
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final style = FilledButton.styleFrom(
-      minimumSize: Size(0, dense ? 32 : 40),
-      padding: EdgeInsets.symmetric(horizontal: dense ? 12 : 16),
-      iconSize: dense ? 15 : 17,
-    );
     final leading = icon == null ? null : Icon(icon);
     final text = Text(label);
-    final child = filled
-        ? FilledButton.icon(onPressed: onTap, style: style, icon: leading, label: text)
-        : FilledButton.tonalIcon(onPressed: onTap, style: style, icon: leading, label: text);
-    return tooltip == null ? child : Tooltip(message: tooltip!, child: child);
+    final button = RepaintBoundary(
+      child: LiveColors(
+        builder: (context, colors, _) {
+          final style = FilledButton.styleFrom(
+            minimumSize: Size(0, dense ? 36 : 40),
+            padding: EdgeInsets.symmetric(horizontal: dense ? 14 : 16),
+            iconSize: dense ? 16 : 18,
+            visualDensity: VisualDensity.standard,
+            backgroundColor: filled ? colors.primary : colors.secondaryContainer,
+            foregroundColor: filled ? colors.onPrimary : colors.onSecondaryContainer,
+          );
+          return filled
+              ? FilledButton.icon(onPressed: onTap, style: style, icon: leading, label: text)
+              : FilledButton.tonalIcon(onPressed: onTap, style: style, icon: leading, label: text);
+        },
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -223,33 +295,44 @@ class const FaderMark({super.key, final double size = 36, final Color? backgroun
     extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final live = background == null || ink == null ? LiveColorsScope.maybeOf(context) : null;
+    final colors = live?.value ?? Theme.of(context).colorScheme;
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: CustomPaint(
         size: Size.square(size),
-        painter: _FaderMarkPainter(background ?? colors.primary, ink ?? colors.onPrimary),
+        painter: _FaderMarkPainter(background, ink, colors, live),
       ),
     );
   }
 }
 
-class _FaderMarkPainter(final Color background, final Color ink) extends CustomPainter {
+class _FaderMarkPainter(
+  final Color? background,
+  final Color? ink,
+  final ColorScheme fallback,
+  final ValueListenable<ColorScheme>? live,
+) extends CustomPainter {
+  this : super(repaint: live);
+
   @override
   void paint(Canvas canvas, Size size) {
+    final colors = live?.value ?? fallback;
+    final bg = background ?? colors.primary;
+    final fg = ink ?? colors.onPrimary;
     final s = size.width;
     canvas.drawRRect(
       RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(s * 0.26)),
-      Paint()..color = background,
+      Paint()..color = bg,
     );
     // The app icon's faders (docs/brand/foreground.svg), in the theme's colors.
     const caps = [0.583, 0.278, 0.472, 0.347];
     final bar = s * 0.097;
     final (top, bottom) = (s * 0.181, s * 0.819);
-    final track = Paint()..color = ink.withValues(alpha: 0.32);
-    final fill = Paint()..color = ink;
+    final track = Paint()..color = fg.withValues(alpha: 0.32);
+    final fill = Paint()..color = fg;
     final rim = Paint()
-      ..color = background
+      ..color = bg
       ..style = PaintingStyle.stroke
       ..strokeWidth = s * 0.03;
     for (var i = 0; i < 4; i++) {
@@ -268,7 +351,8 @@ class _FaderMarkPainter(final Color background, final Color ink) extends CustomP
   }
 
   @override
-  bool shouldRepaint(_FaderMarkPainter old) => old.background != background || old.ink != ink;
+  bool shouldRepaint(_FaderMarkPainter old) =>
+      old.background != background || old.ink != ink || old.live != live || (live == null && old.fallback != fallback);
 }
 
 /// A rounded panel on the studio floor.
@@ -281,14 +365,29 @@ class const Panel({
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      child: child,
+    final borderRadius = BorderRadius.circular(radius);
+    if (color != null) {
+      return Container(
+        padding: padding,
+        decoration: BoxDecoration(color: color, borderRadius: borderRadius),
+        child: child,
+      );
+    }
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: LiveColors(
+              builder: (context, colors, _) => DecoratedBox(
+                decoration: BoxDecoration(color: colors.surfaceContainerLow, borderRadius: borderRadius),
+              ),
+            ),
+          ),
+        ),
+        RepaintBoundary(
+          child: Padding(padding: padding, child: child),
+        ),
+      ],
     );
   }
 }

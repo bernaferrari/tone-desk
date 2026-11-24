@@ -11,7 +11,7 @@
 <p align="center"><a href="https://bernaferrari.github.io/tone-desk/"><strong>Open Tone Desk ↗</strong></a></p>
 
 <p align="center">
-  <img src="docs/screenshots/how-colorful.webp" width="100%" alt="The same gold seed through all nine Material styles, from Gray to Wild, with the preview phones changing color in light and dark">
+  <img src="docs/screenshots/how-colorful.webp" width="100%" alt="A left-to-right drag across the How colorful? strip changes the light and dark phone previews from Gray to Wild using the same gold seed">
 </p>
 
 ## Three steps, no manual

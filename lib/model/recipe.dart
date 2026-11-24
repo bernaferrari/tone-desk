@@ -182,15 +182,15 @@ extension StyleText on Variant {
   };
 
   String get blurb => switch (this) {
-    Variant.tonalSpot => 'Soft and safe. Android’s default.',
-    Variant.vibrant => 'Your color, turned all the way up.',
-    Variant.expressive => 'Shifts the hues for an unexpected pairing.',
-    Variant.fidelity => 'Keeps your color exactly as you picked it.',
-    Variant.content => 'Close to your color, with friendly neighbors.',
+    Variant.tonalSpot => 'Soft buttons and a gentle accent. Android’s default.',
+    Variant.vibrant => 'Turns up the saturation on buttons in your chosen hue.',
+    Variant.expressive => 'Changes the button hue and adds contrasting accents.',
+    Variant.fidelity => 'Builds around your color and adds a complementary accent.',
+    Variant.content => 'Builds around your color and adds a nearby accent.',
     Variant.neutral => 'Almost gray, with a hint of your color.',
-    Variant.monochrome => 'No color at all. Just light and dark.',
-    Variant.rainbow => 'Bright accents on surfaces tinted by your color.',
-    Variant.fruitSalad => 'Every hue spun away from your color.',
+    Variant.monochrome => 'Gray buttons, accents, and backgrounds.',
+    Variant.rainbow => 'Colorful buttons and accents on gray backgrounds.',
+    Variant.fruitSalad => 'Shifts the button hue and keeps your hue in the accent.',
   };
 
   String get dartName => 'DynamicSchemeVariant.$name';

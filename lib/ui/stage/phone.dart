@@ -30,26 +30,28 @@ class const PhoneFrame({super.key, required final Widget child}) extends Statele
             BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 40, offset: const Offset(0, 18)),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(44),
-          child: Probe(
-            role: Role.surface,
-            child: Material(
-              color: colors.surface,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: MediaQuery(
-                      data: MediaQuery.of(context).copyWith(
-                        padding: const EdgeInsets.only(top: statusBarHeight, bottom: homeIndicatorHeight),
-                        viewPadding: const EdgeInsets.only(top: statusBarHeight, bottom: homeIndicatorHeight),
+        child: RepaintBoundary(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(44),
+            child: Probe(
+              role: Role.surface,
+              child: Material(
+                color: colors.surface,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          padding: const EdgeInsets.only(top: statusBarHeight, bottom: homeIndicatorHeight),
+                          viewPadding: const EdgeInsets.only(top: statusBarHeight, bottom: homeIndicatorHeight),
+                        ),
+                        child: child,
                       ),
-                      child: child,
                     ),
-                  ),
-                  const Positioned(top: 0, left: 0, right: 0, child: IgnorePointer(child: _StatusBar())),
-                  const Positioned(left: 0, right: 0, bottom: 0, child: IgnorePointer(child: _HomeIndicator())),
-                ],
+                    const Positioned(top: 0, left: 0, right: 0, child: IgnorePointer(child: _StatusBar())),
+                    const Positioned(left: 0, right: 0, bottom: 0, child: IgnorePointer(child: _HomeIndicator())),
+                  ],
+                ),
               ),
             ),
           ),

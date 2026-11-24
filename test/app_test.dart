@@ -257,7 +257,10 @@ void main() {
       final angles = find.textContaining(RegExp(r'^\d+°$'));
       expect(angles, findsNWidgets(Channel.values.length));
       expect(find.textContaining(RegExp(r'^Hue \d+°$')), findsNothing);
-      expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNWidgets(Channel.values.length));
+      expect(find.textContaining(RegExp(r'^Chroma \d+$')), findsNothing);
+      for (final channel in Channel.values) {
+        expect(find.byTooltip('${channel.label} chroma'), findsOneWidget);
+      }
       final primaryKnob = tester.getRect(find.byType(HueKnob).first);
       final primaryAngle = tester.getRect(angles.first);
       expect(primaryAngle.center.dx, closeTo(primaryKnob.center.dx, 0.01));
@@ -280,12 +283,18 @@ void main() {
     expect(rows.last.bottomLeft, columns.last.topRight);
 
     final fader = find.byType(Fader).first;
+    cubit.toggleMute(Channel.primary);
     await tester.ensureVisible(fader);
     await tester.pumpAndSettle();
+    expect(tester.widget<Fader>(fader).semanticValue, '0');
     final box = tester.getRect(fader);
     await tester.dragFrom(box.centerLeft + const Offset(12, 0), Offset(box.width - 24, 0));
     await tester.pumpAndSettle();
+    expect(cubit.state.recipe.mixOf(Channel.primary).muted, isFalse);
     expect(cubit.state.recipe.mixOf(Channel.primary).chroma, greaterThan(40));
+    cubit.undo();
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.mixOf(Channel.primary).muted, isTrue);
 
     await tester.ensureVisible(find.byTooltip('Stand the channels up'));
     await tester.pumpAndSettle();

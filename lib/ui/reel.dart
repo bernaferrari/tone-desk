@@ -443,7 +443,7 @@ class const ReelLens({
             );
           },
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
+            duration: pressed ? Duration.zero : const Duration(milliseconds: 160),
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
               color: color,

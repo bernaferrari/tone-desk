@@ -27,6 +27,8 @@ class const StudioState({
   /// The channel the inspector last pointed at, to light up on the desk.
   final Channel? spotlight,
   final int spotlightTick = 0,
+  /// True while the user is actively dragging a continuous control.
+  final bool scrubbing = false,
   final List<ThemeRecipe> undoStack = const [],
   final List<ThemeRecipe> redoStack = const [],
 }) extends Equatable {
@@ -43,6 +45,7 @@ class const StudioState({
     bool? mixerRows,
     Channel? Function()? spotlight,
     int? spotlightTick,
+    bool? scrubbing,
     List<ThemeRecipe>? undoStack,
     List<ThemeRecipe>? redoStack,
   }) => StudioState(
@@ -54,6 +57,7 @@ class const StudioState({
     mixerRows: mixerRows ?? this.mixerRows,
     spotlight: spotlight != null ? spotlight() : this.spotlight,
     spotlightTick: spotlightTick ?? this.spotlightTick,
+    scrubbing: scrubbing ?? this.scrubbing,
     undoStack: undoStack ?? this.undoStack,
     redoStack: redoStack ?? this.redoStack,
   );
@@ -68,6 +72,7 @@ class const StudioState({
     mixerRows,
     spotlight,
     spotlightTick,
+    scrubbing,
     undoStack,
     redoStack,
   ];
@@ -131,13 +136,19 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
   }
 
   /// Starts a drag: the whole gesture becomes one undo step.
-  void beginScrub() => _scrubStart ??= state.recipe;
+  void beginScrub() {
+    _scrubStart ??= state.recipe;
+    if (!state.scrubbing) emit(state.copyWith(scrubbing: true));
+  }
 
   void endScrub() {
     final start = _scrubStart;
     _scrubStart = null;
-    if (start == null || start == state.recipe) return;
-    emit(state.copyWith(undoStack: _push(state.undoStack, start), redoStack: const []));
+    if (start == null || start == state.recipe) {
+      if (state.scrubbing) emit(state.copyWith(scrubbing: false));
+      return;
+    }
+    emit(state.copyWith(scrubbing: false, undoStack: _push(state.undoStack, start), redoStack: const []));
     _save(state);
   }
 
@@ -146,7 +157,7 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
     live: live,
   );
 
-  void setVariant(Variant variant) => _commit(state.recipe.copyWith(variant: variant));
+  void setVariant(Variant variant, {bool live = false}) => _commit(state.recipe.copyWith(variant: variant), live: live);
 
   void setContrast(double contrast, {bool live = false}) =>
       _commit(state.recipe.copyWith(contrast: contrast.clamp(-1.0, 1.0)), live: live);
@@ -165,13 +176,11 @@ class StudioCubit({StudioState? initial, final SharedPreferencesAsync? _prefs}) 
   );
 
   /// Sets the chroma a channel shows now, at the current Vivid or Surface tint.
-  void setChannelChroma(Channel channel, double? chroma, {bool live = false}) => _commit(
-    state.recipe.withMix(
-      channel,
-      state.recipe.mixOf(channel).withChroma(chroma == null ? null : _unscaled(channel, chroma)),
-    ),
-    live: live,
-  );
+  void setChannelChroma(Channel channel, double? chroma, {bool live = false}) {
+    final mix = state.recipe.mixOf(channel);
+    final next = chroma == null ? mix.withChroma(null) : mix.withChroma(_unscaled(channel, chroma)).withMuted(false);
+    _commit(state.recipe.withMix(channel, next), live: live);
+  }
 
   /// Sets a channel's hue and the chroma it shows now. The scheme picks each
   /// role's tone.
