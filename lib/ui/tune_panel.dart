@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -26,7 +27,7 @@ class const ThemeControls({super.key, final bool compact = false}) extends State
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _Section(number: 1, title: 'Pick a color', trailing: _SeedChip(), child: _ColorDots()),
+          const _Section(number: 1, title: 'Pick a color', trailing: _SeedActions(), child: _SeedPicker()),
           const SizedBox(height: 28),
           const _Section(number: 2, title: 'How colorful?', trailing: _StyleName(), child: _StylePills()),
           const SizedBox(height: 28),
@@ -113,138 +114,191 @@ class const _SeedChip() extends StatelessWidget {
   }
 }
 
-class const _ColorDots() extends StatelessWidget {
+final _seedWheel = List<Color?>.filled(360, null);
+
+Color _seedAt(double hue) {
+  final index = hue.round() % 360;
+  return _seedWheel[index] ??= Oklch(0.68, 0.22, index.toDouble()).toColor();
+}
+
+/// True when [seed] sits off the vivid hue reel (e.g. gray, pastel, or dark).
+bool _isCustomSeed(Color seed, [Oklch? parsed]) {
+  final color = parsed ?? Oklch.fromColor(seed);
+  if (color.c < 0.06) return true;
+  final wheel = _seedAt(color.h);
+  return (seed.r - wheel.r).abs() > 0.1 || (seed.g - wheel.g).abs() > 0.1 || (seed.b - wheel.b).abs() > 0.1;
+}
+
+class const _SeedPicker() extends StatefulWidget {
+  @override
+  State<_SeedPicker> createState() => _SeedPickerState();
+}
+
+class _SeedPickerState() extends State<_SeedPicker> {
+  static const _phoneThrottleMs = 36;
+
+  final _clock = Stopwatch()..start();
+  Timer? _flushTimer;
+  Color? _pending;
+  int _lastEmitMs = -_phoneThrottleMs;
+
+  @override
+  void dispose() {
+    _flushTimer?.cancel();
+    super.dispose();
+  }
+
+  void _emit(StudioCubit cubit, Color color) {
+    _lastEmitMs = _clock.elapsedMilliseconds;
+    _pending = null;
+    cubit.setSeed(color, live: true);
+  }
+
+  void _onChanged(StudioCubit cubit, double hue) {
+    final next = _seedAt(hue);
+    // Tint the lightweight studio chrome immediately on every frame, while
+    // pacing full mock-phone rebuilds so the reel itself never drops frames.
+    final state = cubit.state;
+    LiveColorsScope.preview(
+      context,
+      resolveScheme(state.recipe.copyWith(seed: next, name: () => null), state.brightness).colors,
+    );
+    final elapsed = _clock.elapsedMilliseconds - _lastEmitMs;
+    if (elapsed >= _phoneThrottleMs) {
+      _flushTimer?.cancel();
+      _emit(cubit, next);
+      return;
+    }
+    _pending = next;
+    _flushTimer ??= Timer(Duration(milliseconds: _phoneThrottleMs - elapsed), () {
+      _flushTimer = null;
+      final pending = _pending;
+      if (pending != null && mounted) _emit(cubit, pending);
+    });
+  }
+
+  void _onEnd(StudioCubit cubit) {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    final pending = _pending;
+    if (pending != null) _emit(cubit, pending);
+    cubit.endScrub();
+  }
+
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<StudioCubit>();
     final seed = context.select((StudioCubit c) => c.state.recipe.seed);
-    final custom = !swatches.any((s) => s.toARGB32() == seed.toARGB32());
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const perRow = 7;
-        const gap = 8.0;
-        final size = math.min((constraints.maxWidth - gap * (perRow - 1)) / perRow, 52.0);
-        final items = <Widget>[
-          for (final swatch in swatches)
-            _Dot(
-              color: swatch,
-              size: size,
-              selected: swatch.toARGB32() == seed.toARGB32(),
-              onTap: () => cubit.setSeed(swatch),
-            ),
-          _ActionDot(
-            icon: Icons.edit_outlined,
-            tooltip: custom ? 'Your color ${seed.hex}. Tap to change it' : 'Type a color',
-            size: size,
-            fill: custom ? seed : null,
-            onTap: () async {
-              final color = await askForColor(context, title: 'Your color', initial: seed);
-              if (color != null) cubit.setSeed(color);
-            },
-          ),
-          _ActionDot(
-            icon: Icons.image_outlined,
-            tooltip: 'Use a photo',
-            size: size,
-            onTap: () => pickSeedFromImage(context),
-          ),
-        ];
-        return Column(
-          spacing: gap,
+    final color = Oklch.fromColor(seed);
+    final hue = color.c < 0.001 ? 0.0 : color.h;
+    final custom = _isCustomSeed(seed, color);
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ColorReel(
+          value: hue,
+          min: 0,
+          max: 360,
+          step: 15,
+          wraps: true,
+          lensColor: seed,
+          colorAt: _seedAt,
+          paletteKey: 'seed hue',
+          semanticLabel: 'Seed hue',
+          semanticValue: '${hue.round() % 360} degrees, ${seed.hex}',
+          onStart: cubit.beginScrub,
+          onEnd: () => _onEnd(cubit),
+          onChanged: (h) => _onChanged(cubit, h),
+        ),
+        const SizedBox(height: 8),
+        Row(
           children: [
-            for (var row = 0; row < items.length; row += perRow)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: items.sublist(row, math.min(row + perRow, items.length)),
+            Expanded(
+              child: Text(
+                custom ? 'Custom color · slide for vivid hues' : 'Drag to choose a hue',
+                style: TextStyle(fontSize: 12, color: custom ? colors.primary : colors.onSurfaceVariant),
               ),
+            ),
+            const _SeedChip(),
           ],
-        );
-      },
-    );
-  }
-}
-
-class const _Dot({
-  required final Color color,
-  required final double size,
-  required final bool selected,
-  required final VoidCallback onTap,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      tooltip: color.hex,
-      onTap: onTap,
-      selected: selected,
-      pressedScale: 1,
-      builder: (context, hovered, _) => _Ring(
-        size: size,
-        selected: selected,
-        hovered: hovered,
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: selected ? Icon(Icons.check_rounded, size: size * 0.4, color: color.ink) : null,
         ),
-      ),
+      ],
     );
   }
 }
 
-/// A circle that does something instead of picking a preset. Once it holds
-/// your own color it fills with it and wears the selection ring.
-class const _ActionDot({
-  required final IconData icon,
-  required final String tooltip,
-  required final double size,
-  required final VoidCallback onTap,
-  final Color? fill,
-}) extends StatelessWidget {
+class const _SeedActions() extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final customSeed = context.select((StudioCubit c) {
+      final seed = c.state.recipe.seed;
+      return _isCustomSeed(seed) ? seed : null;
+    });
+    final custom = customSeed != null;
     final colors = Theme.of(context).colorScheme;
-    final fill = this.fill;
-    return Pressable(
-      tooltip: tooltip,
-      onTap: onTap,
-      pressedScale: 1,
-      builder: (context, hovered, _) => _Ring(
-        size: size,
-        selected: fill != null,
-        hovered: hovered,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: fill ?? (hovered ? colors.surfaceContainerHighest : colors.surfaceContainerHigh),
-            border: fill == null ? Border.all(color: colors.outlineVariant, width: 1.5) : null,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        Pressable(
+          tooltip: 'Type a color',
+          selected: custom,
+          onTap: () async {
+            final cubit = context.read<StudioCubit>();
+            final color = await askForColor(context, title: 'Your color', initial: cubit.state.recipe.seed);
+            if (!cubit.isClosed && color != null) cubit.setSeed(color);
+          },
+          builder: (context, hovered, _) => AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: custom
+                  ? colors.secondaryContainer
+                  : Color.alphaBlend(
+                      colors.onSurface.withValues(alpha: hovered ? 0.08 : 0.04),
+                      colors.surfaceContainerLow,
+                    ),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(
+                color: custom ? colors.primary.withValues(alpha: 0.45) : colors.outlineVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 5,
+              children: [
+                if (custom)
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: customSeed,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: colors.outline.withValues(alpha: 0.4)),
+                    ),
+                  )
+                else
+                  Icon(Icons.edit_outlined, size: 14, color: colors.onSurfaceVariant),
+                Text(
+                  'Custom',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: custom ? FontWeight.w600 : FontWeight.w500,
+                    color: custom ? colors.onSecondaryContainer : colors.onSurface,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Icon(icon, size: size * 0.4, color: fill?.ink ?? colors.onSurfaceVariant),
         ),
-      ),
-    );
-  }
-}
-
-class const _Ring({
-  required final double size,
-  required final bool selected,
-  required final bool hovered,
-  required final Widget child,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      width: size,
-      height: size,
-      padding: EdgeInsets.all(selected ? 4 : (hovered ? 1 : 0)),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: selected ? colors.onSurface : Colors.transparent, width: 2),
-      ),
-      child: child,
+        IconButton(
+          icon: const Icon(Icons.image_outlined, size: 20),
+          tooltip: 'Use a photo',
+          onPressed: () => pickSeedFromImage(context),
+        ),
+      ],
     );
   }
 }

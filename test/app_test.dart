@@ -37,6 +37,23 @@ void main() {
     expect(find.text('Mixer'), findsNothing);
   });
 
+  testWidgets('the seed hue reel changes color as a single undo step', (tester) async {
+    final cubit = await boot(tester);
+    final original = cubit.state.recipe.seed;
+    final reel = find.byType(ColorReel);
+    final title = tester.getRect(find.text('Pick a color'));
+    final custom = tester.getRect(find.byTooltip('Type a color'));
+    final image = tester.getRect(find.byTooltip('Use a photo'));
+    expect(custom.left, greaterThanOrEqualTo(title.right));
+    expect(image.left, greaterThan(custom.left));
+    await tester.drag(reel, const Offset(65, 0));
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.seed, isNot(original));
+    cubit.undo();
+    await tester.pumpAndSettle();
+    expect(cubit.state.recipe.seed, original);
+  });
+
   testWidgets('About keeps the mark square and returns to the studio', (tester) async {
     await boot(tester);
     await tester.tap(find.byTooltip('About Tone Desk'));
